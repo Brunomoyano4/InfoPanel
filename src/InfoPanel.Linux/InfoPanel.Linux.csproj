@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!-- InfoPanel para Linux: corre como servicio de systemd, sin interfaz propia. Lee el hardware de /sys y /proc
+       y controla el equipo con las herramientas del sistema (systemctl, pactl, playerctl, nvidia-smi...).
+       El servidor, la API y la web vienen de InfoPanel.Core -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>InfoPanel</RootNamespace>
+    <AssemblyName>InfoPanel</AssemblyName>
+    <Description>Telemetría y control de equipos con Linux desde el celular</Description>
+  </PropertyGroup>
+
+  <!-- Publicación: un solo ejecutable autocontenido (no requiere instalar .NET). Sin extracción de librerías
+       nativas: en Linux el runtime ya va dentro del ejecutable y un servicio de systemd no siempre tiene $HOME -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <RuntimeIdentifier>linux-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DebugType>none</DebugType>
+    <IsTransformWebConfigDisabled>true</IsTransformWebConfigDisabled>
+    <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\InfoPanel.Core\InfoPanel.Core.csproj" />
+    <PackageReference Include="QRCoder" Version="1.8.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Instalador y servicio: se publican junto al ejecutable -->
+    <None Update="packaging\**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

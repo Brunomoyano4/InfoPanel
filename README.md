@@ -2,8 +2,11 @@
 
 Panel de telemetría y control de la PC accesible desde el celular (u otro dispositivo) por la red local.
 Un servicio en .NET corre en la PC, lee los sensores y sirve una web instalable (PWA) que se actualiza en vivo por WebSocket.
+Hay versión para **Windows** (con ícono en la bandeja) y para **Linux** (servicio de systemd, pensada también para servidores como Proxmox).
 
 ## Descargar y usar
+
+### Windows
 
 1. Descargar `InfoPanel.exe` desde los releases públicos: https://github.com/Brunomoyano4/InfoPanel-releases/releases/latest (el código de este repositorio es privado; ahí solo se publica el ejecutable). Es un solo archivo: no hace falta instalar .NET ni nada más.
 2. Ponerlo en una carpeta propia (por ejemplo `C:\InfoPanel`), porque al lado se van a crear su configuración y sus certificados.
@@ -12,13 +15,23 @@ Un servicio en .NET corre en la PC, lee los sensores y sirve una web instalable 
 5. Aparece el ícono de InfoPanel junto al reloj. Desde su menú, **Conectar un celular (QR)…** muestra un QR para abrirlo en el celu, y ahí se ve también el PIN.
 6. Opcional: activar **Iniciar con Windows** desde el mismo menú.
 
+### Linux
+
+Con una sola línea, como root (instala en `/opt/infopanel`, crea el servicio `infopanel` de systemd y lo deja arrancando con el equipo):
+
+```bash
+curl -fsSL https://github.com/Brunomoyano4/InfoPanel-releases/releases/latest/download/install.sh | sudo sh
+```
+
+Al terminar muestra las direcciones, el PIN y un QR en la terminal. Después, `infopanel pin` los vuelve a mostrar y `journalctl -u infopanel -f` muestra el registro. También se puede descargar `InfoPanel-linux-x64` e `install.sh` del release, ponerlos en la misma carpeta y correr `sudo sh install.sh` (usa el ejecutable que tiene al lado). `sudo sh install.sh --uninstall` lo desinstala. Detalles en "Linux".
+
 Cada PC genera su propio PIN, sus certificados y sus dashboards la primera vez que se abre (nada se comparte entre PCs).
 
 ## Tutorial e historial de versiones
 
 - **Tutorial guiado**: la primera vez que un dispositivo abre la app (cuando llegan los primeros datos), un recorrido resalta cada parte (PC y conexión, dashboards, opciones, editar, gráficos, Sensores, Procesos y Control) con una tarjeta que la explica; se puede saltar o ir para atrás. Los pasos sin nada visible se saltean. Se vuelve a ver desde Control → App → **Ver el tutorial**.
 - **Historial de versiones**: Control → App → **Historial de versiones** muestra las novedades de cada versión. Cuando una PC cambia de versión (por ejemplo, después de actualizarse), la app muestra una sola vez las novedades de la versión nueva.
-- La fuente es `src/InfoPanel.Server/wwwroot/changelog.json` (va embebido en el exe y la app lo pide por `GET /api/changelog`, así cada PC muestra el suyo). `CHANGELOG.md` en la raíz tiene lo mismo para GitHub. Al preparar una versión: agregar su entrada arriba en el JSON con `date: null` mientras está en desarrollo, ponerle la fecha al publicarla y regenerar `CHANGELOG.md`.
+- La fuente es `src/InfoPanel.Core/wwwroot/changelog.json` (va embebido en el exe y la app lo pide por `GET /api/changelog`, así cada PC muestra el suyo). `CHANGELOG.md` en la raíz tiene lo mismo para GitHub. Al preparar una versión: agregar su entrada arriba en el JSON con `date: null` mientras está en desarrollo, ponerle la fecha al publicarla y regenerar `CHANGELOG.md`.
 
 ## Actualizaciones
 
@@ -26,20 +39,23 @@ Desde la 1.2.0, InfoPanel se actualiza solo:
 
 - Revisa el repositorio público [`Brunomoyano4/InfoPanel-releases`](https://github.com/Brunomoyano4/InfoPanel-releases) 30 segundos después de arrancar y cada 6 horas (o con **Buscar actualizaciones** en Control → App, o tocando la versión en el menú de la bandeja).
 - Si hay una versión nueva, avisa con una notificación en la bandeja, un ítem **Actualizar a la versión X** en su menú, un aviso arriba del Panel (se puede ocultar hasta la próxima versión) y, en Control → App, las novedades con el botón **Actualizar**.
-- Al actualizar: descarga `InfoPanel.exe`, verifica que su SHA-256 coincida con la huella que publica GitHub para ese archivo (si no coincide o falta, no instala nada), renombra el ejecutable en uso a `InfoPanel.old.exe`, pone el nuevo en su lugar y lo arranca. El nuevo espera a que el anterior se cierre (argumento `--after-update`), avisa "InfoPanel actualizado" y borra el `.old`. La configuración, el PIN, los certificados y los dashboards están junto al ejecutable y no se tocan; los dispositivos vinculados se reconectan solos.
-- Solo el `InfoPanel.exe` publicado se reemplaza a sí mismo; en desarrollo (`dotnet build`, con `InfoPanel.dll` al lado) se ve si hay versión nueva pero no se instala.
+- Al actualizar: descarga el ejecutable de su sistema (`InfoPanel.exe` en Windows, `InfoPanel-linux-x64` en Linux), verifica que su SHA-256 coincida con la huella que publica GitHub para ese archivo (si no coincide o falta, no instala nada), renombra el ejecutable en uso a `InfoPanel.old.exe`, pone el nuevo en su lugar y lo arranca. El nuevo espera a que el anterior se cierre (argumento `--after-update`), avisa "InfoPanel actualizado" y borra el `.old`. En Linux, con el servicio de systemd, el proceso simplemente termina y systemd (`Restart=always`) arranca el ejecutable nuevo. La configuración, el PIN, los certificados y los dashboards están junto al ejecutable y no se tocan; los dispositivos vinculados se reconectan solos.
+- Solo el ejecutable publicado se reemplaza a sí mismo; en desarrollo (`dotnet build`, con `InfoPanel.dll` al lado) se ve si hay versión nueva pero no se instala.
 - Para probar sin GitHub, la variable de entorno `INFOPANEL_UPDATE_URL` apunta a otro JSON con el formato de la API de releases (`tag_name`, `body`, `assets[].name/size/digest/browser_download_url`).
 
-Para publicar una versión: subir `<Version>` en el `.csproj`, `dotnet publish -c Release` y crear el release con la etiqueta `vX.Y.Z` y el `InfoPanel.exe` en `InfoPanel-releases` (es el que leen las copias instaladas) y también en este repositorio.
+Para publicar una versión: subir `<Version>` en `src/Directory.Build.props` (es la misma para Windows y Linux), publicar los dos ejecutables y crear el release con la etiqueta `vX.Y.Z` en `InfoPanel-releases` (es el que leen las copias instaladas) y también en este repositorio, con tres archivos: `InfoPanel.exe`, `InfoPanel-linux-x64` e `install.sh`.
 
 ## Publicar una versión (desarrollo)
 
 ```bash
-cd src/InfoPanel.Server
-dotnet publish -c Release -o ../../publish
+dotnet publish src/InfoPanel.Windows -c Release -o publish/windows
+dotnet publish src/InfoPanel.Linux -c Release -o publish/linux
 ```
 
-Genera `publish/InfoPanel.exe`: un solo archivo autocontenido (win-x64, ~63 MB, comprimido), con la web embebida. En desarrollo, `dotnet build` copia `wwwroot/` junto al ejecutable y se sirve desde ahí, así se puede cambiar la web sin recompilar. Si esa carpeta no existe, se usa la copia embebida. La versión se cambia en `<Version>` del `.csproj`.
+- `publish/windows/InfoPanel.exe`: un solo archivo autocontenido (win-x64, ~63 MB, comprimido), con la web embebida.
+- `publish/linux/InfoPanel` (se sube como `InfoPanel-linux-x64`): un solo archivo autocontenido (linux-x64, ~50 MB), con la web embebida, y `publish/linux/packaging/install.sh`. Se compila desde Windows sin nada extra.
+
+En desarrollo, `dotnet build` copia `wwwroot/` (de InfoPanel.Core) junto al ejecutable y se sirve desde ahí, así se puede cambiar la web sin recompilar. Si esa carpeta no existe, se usa la copia embebida.
 
 ## Panel (dashboards personalizables)
 
@@ -136,12 +152,12 @@ El panel toma el primer valor mayor a 0 según el orden: LHM → alternativo. Si
 - Windows 10/11 y .NET 10 SDK.
 - **Ejecutar como administrador** (el ejecutable lo pide solo, por el manifiesto): lo necesitan el TDP, los ventiladores y el inicio con Windows.
 - Opcional: el driver **PawnIO** ([pawnio.eu](https://pawnio.eu)) para que LibreHardwareMonitor lea todos los sensores de CPU y placa (clock y temperatura por núcleo, voltajes). Sin él, la temperatura, el consumo y el clock del CPU salen de fuentes alternativas (ver "CPU sin PawnIO").
-- Opcional: `ryzenadj.exe` (y sus DLL) en `src/InfoPanel.Server/tools/` para controlar el TDP en equipos AMD que no son ASUS.
+- Opcional: `ryzenadj.exe` (y sus DLL) en `src/InfoPanel.Windows/tools/` para controlar el TDP en equipos AMD que no son ASUS.
 
 ## Uso
 
 ```bash
-cd src/InfoPanel.Server
+cd src/InfoPanel.Windows
 dotnet build
 ```
 
@@ -273,11 +289,78 @@ Sistema visual (implementado en `wwwroot/style.css`, bloque "Sistema visual v2")
   - Cada dispositivo recuerda la última categoría elegida.
   - Cada tarjeta se marca con `data-cat` en `buildControl` (`app.js`); para sumar una categoría, agregarla a `CONTROL_CATS`.
 
+## Linux
+
+La misma app y la misma web, con el hardware leído de `/sys` y `/proc` y los controles hechos con las herramientas del sistema. Corre como root en el servicio `infopanel` de systemd (lo crea `install.sh`), sin interfaz propia. Funciona en servidores sin escritorio (Proxmox, Debian, Ubuntu Server) y en equipos de escritorio. Solo x86_64.
+
+**Qué muestra**: los mismos widgets que en Windows. Los sensores se arman con los nombres de LibreHardwareMonitor, así la web los usa igual.
+
+| Dato | Fuente |
+|---|---|
+| CPU: carga total y por núcleo, clocks | `/proc/stat`, cpufreq (o `/proc/cpuinfo` en máquinas virtuales) |
+| CPU: temperatura | `coretemp` (Intel), `k10temp`/`zenpower` (AMD); si no, zonas térmicas (`x86_pkg_temp`, ACPI) |
+| CPU: consumo | RAPL (`/sys/class/powercap`, requiere root) |
+| Memoria y swap | `/proc/meminfo` |
+| GPU NVIDIA | `nvidia-smi` (carga, temperatura, consumo, clocks, VRAM, ventilador) |
+| GPU AMD | `amdgpu` (carga, VRAM y su hwmon: temperaturas, consumo, clocks, ventilador) |
+| GPU Intel | Frecuencia (i915 o xe), carga estimada por el tiempo fuera de reposo (RC6) y consumo del dominio `uncore` de RAPL; no tiene temperatura propia |
+| Discos | `/proc/diskstats` (lectura/escritura, actividad) y temperatura (`nvme`, `drivetemp`); espacio de cada sistema de archivos real (en ZFS, la raíz y los pools, no cada dataset de VM o contenedor) |
+| Red | `/proc/net/dev` de las placas físicas conectadas (no los puentes `vmbr`, `docker`, `veth`, `tap`: repetirían el tráfico) |
+| Placa | El resto de los chips hwmon: ventiladores (aparecen cuando giran alguna vez), temperaturas y voltajes |
+| Batería y alimentación | `/sys/class/power_supply` |
+| Sistema | `/etc/os-release` y kernel, DMI (BIOS y placa), RAM con `dmidecode`, GPUs con `lspci` |
+
+**Qué controla**:
+
+| Control | Cómo | Cuándo aparece |
+|---|---|---|
+| Volumen, silencio, micrófono, salida | `pactl` (PulseAudio o PipeWire) o `wpctl`, como el usuario con sesión abierta | Si hay audio y una sesión de usuario |
+| Multimedia | `playerctl` | Si está instalado |
+| Brillo | `/sys/class/backlight` | Si hay pantalla interna |
+| Modo de energía | `powerprofilesctl`; si no, la preferencia de energía del CPU (EPP) o el regulador (`powersave`, `schedutil`, `performance`) | Si alguno está disponible |
+| Bloquear, suspender, hibernar, reiniciar, apagar | `loginctl lock-sessions`, `systemctl suspend/hibernate/reboot/poweroff` | Bloquear con sesión gráfica; suspender e hibernar si el kernel los ofrece (`/sys/power/state`) |
+| Ventiladores de la placa | PWM de hwmon (`pwmN_enable` = 1 manual, se vuelve al modo original con Automático y al cerrar) | Si el chip lo permite |
+| Cerrar procesos | Igual que en Windows | Siempre |
+| Iniciar con el sistema | `systemctl enable/disable infopanel` | Siempre (necesita el servicio de `install.sh`) |
+
+No hay control de pantallas, modos ASUS, TDP ni lista de aplicaciones: la web oculta esas tarjetas y widgets (cada PC informa qué ofrece en `controls.caps`).
+
+**Comandos**: `infopanel pin` (direcciones, PIN y QR), `infopanel --help`. Los datos (`config.json`, `certs/`, `dashboards.json`) están en `/opt/infopanel`. Puertos: 5055 (HTTP), 5056 (HTTPS) y 5057 (UDP, descubrimiento); si hay firewall, hay que permitirlos.
+
+**Herramientas opcionales**: `pciutils` (nombres de las GPUs), `dmidecode` (módulos de RAM), `nvidia-smi` (viene con el driver de NVIDIA), `playerctl`, `power-profiles-daemon`.
+
+**Probado en WSL con Debian 13 y systemd**: instalación con `install.sh` (servicio, comando `infopanel`, PIN y QR en la terminal), vinculación por PIN, telemetría por WebSocket (CPU, memoria y swap, discos, red, batería, procesos), página de Control con solo lo disponible, inicio con el sistema (`systemctl enable/disable`), cerrar procesos, actualización desde la app (descarga, verificación, reemplazo y reinicio por systemd conservando la configuración) y `--uninstall`. Sin hardware real: en WSL no hay temperaturas, RAPL, GPU, DMI ni PCI, así que esas fuentes no están verificadas en un equipo físico. Para probar al lado de un InfoPanel de Windows, usar otros puertos en `/opt/infopanel/config.json` (`Port`, `HttpsPort`, `DiscoveryPort`).
+
 ## Estructura
 
+Tres proyectos: lo común y uno por sistema (`dotnet build InfoPanel.slnx` compila los tres). La versión está en `src/Directory.Build.props`.
+
 ```
-src/InfoPanel.Server/
-├── Program.cs                 Arranque, instancia única, autenticación, endpoints /api y bandeja
+src/InfoPanel.Core/            Común: servidor, API, web, vinculación, certificados, descubrimiento,
+│                              dashboards y actualizaciones
+├── InfoPanelServer.cs         Servidor HTTP/HTTPS, web, WebSocket y todos los endpoints /api
+├── Platform/Contracts.cs      Datos que viajan a la web e interfaces que implementa cada sistema
+│                              (hardware, sistema, controles, ASUS, TDP, pantallas, inicio, apps, actualización)
+├── Services/
+│   ├── AuthService.cs         PIN, tokens y config.json
+│   ├── CertificateService.cs  CA propia y certificado HTTPS (certs/)
+│   ├── DiscoveryService.cs    Anuncio y descubrimiento de PCs por UDP
+│   ├── DashboardService.cs    Dashboards personalizados (dashboards.json)
+│   ├── ProcessSampler.cs      Procesos con su CPU y memoria
+│   ├── TelemetryHub.cs        Clientes WebSocket
+│   ├── TelemetryLoop.cs       Ciclo de 1 s que lee todo y lo envía
+│   └── UpdateService.cs       Actualizaciones desde InfoPanel-releases
+└── wwwroot/                   Web (HTML/CSS/JS sin build)
+    ├── app.js                 PCs y conexión, métricas, sensores, procesos, control, temas
+    ├── dashboard.js           Dashboards: grilla, widgets, edición, configuración
+    ├── setup.html             Página de instalación (certificado + app)
+    ├── changelog.json         Historial de versiones (también en CHANGELOG.md)
+    ├── sw.js                  Service worker de la app instalada
+    └── icon-*.png             Íconos de la app (192, 512 y maskable)
+
+src/InfoPanel.Windows/         InfoPanel.exe
+├── Program.cs                 Arranque, instancia única, registro de lo de Windows y bandeja
+├── WindowsPlatform.cs         Qué ofrece Windows y cómo se reinicia al actualizar
 ├── Native/
 │   ├── Win32.cs               P/Invoke (ACPI, teclas, energía)
 │   ├── DisplayConfig.cs       P/Invoke de pantallas (CCD y modos)
@@ -288,43 +371,40 @@ src/InfoPanel.Server/
 │   └── ConnectForm.cs         Ventana con el QR para conectar un celular
 ├── Services/
 │   ├── HardwareService.cs     Sensores LibreHardwareMonitor + ventiladores de placa
-│   ├── SystemService.cs       Procesos, discos, uptime, info del sistema
+│   ├── SystemService.cs       Discos, uptime, alimentación, info del sistema
 │   ├── CpuFallbackService.cs  Temperatura/consumo/clock del CPU sin PawnIO
-│   ├── DashboardService.cs    Dashboards personalizados (dashboards.json)
-│   ├── CertificateService.cs  CA propia y certificado HTTPS (certs/)
-│   ├── DiscoveryService.cs    Anuncio y descubrimiento de PCs por UDP
-│   ├── AuthService.cs         PIN, tokens y config.json
-│   ├── TelemetryHub.cs        Clientes WebSocket
-│   ├── TelemetryLoop.cs       Ciclo de 1 s que lee todo y lo envía
-│   ├── AutoStartService.cs    Tarea programada de inicio con Windows
-│   └── UpdateService.cs       Actualizaciones desde InfoPanel-releases
-├── Controls/
-│   ├── AsusAcpi.cs            Driver ACPI de ASUS (bajo nivel)
-│   ├── AsusControl.cs         Modos y curvas de ventilador ASUS
-│   ├── TdpControl.cs          TDP vía ASUS o ryzenadj
-│   ├── SystemControl.cs       Volumen, brillo, multimedia, energía, procesos
-│   ├── DisplayControl.cs      Pantallas, presets y modo de proyección
-│   └── AppLauncher.cs         Lista de apps instaladas, íconos y apertura sin admin
-└── wwwroot/                   Web (HTML/CSS/JS sin build)
-    ├── app.js                 PCs y conexión, métricas, sensores, procesos, control, temas
-    ├── dashboard.js           Dashboards: grilla, widgets, edición, configuración
-    ├── setup.html             Página de instalación (certificado + app)
-    ├── changelog.json         Historial de versiones (también en CHANGELOG.md)
-    ├── sw.js                  Service worker de la app instalada
-    └── icon-*.png             Íconos de la app (192, 512 y maskable)
+│   └── AutoStartService.cs    Tarea programada de inicio con Windows
+└── Controls/
+    ├── AsusAcpi.cs            Driver ACPI de ASUS (bajo nivel)
+    ├── AsusControl.cs         Modos y curvas de ventilador ASUS
+    ├── TdpControl.cs          TDP vía ASUS o ryzenadj
+    ├── SystemControl.cs       Volumen, brillo, multimedia, energía, procesos
+    ├── DisplayControl.cs      Pantallas, presets y modo de proyección
+    └── AppLauncher.cs         Lista de apps instaladas, íconos y apertura sin admin
+
+src/InfoPanel.Linux/           InfoPanel (se publica como InfoPanel-linux-x64)
+├── Program.cs                 Arranque, comandos (pin, --help) y registro de lo de Linux
+├── LinuxPlatform.cs           Qué ofrece este Linux, reinicio al actualizar e inicio con systemd
+├── LinuxHardwareMonitor.cs    Sensores de /sys y /proc, nvidia-smi y ventiladores por PWM
+├── LinuxSystemMonitor.cs      Discos, uptime, alimentación, info del sistema
+├── LinuxSystemControl.cs      Audio, multimedia, brillo, energía, procesos
+├── Sys.cs                     Lectura de /sys y /proc y ejecución de comandos
+└── packaging/install.sh       Instalador: /opt/infopanel, servicio de systemd y comando infopanel
 ```
+
+Para sumar algo que dependa del sistema: agregarlo a la interfaz en `Platform/Contracts.cs`, implementarlo en los dos proyectos (o con una implementación vacía como `NoDisplayControl`) y, si la web tiene que ocultarlo donde no existe, sumarlo a `PlatformCapsDto`.
 
 ### API
 
 Todas las rutas `/api/*` (salvo `/api/pair` y `/api/hello`) requieren `Authorization: Bearer <token>`. Las rutas `/api/*` aceptan pedidos de cualquier origen (CORS), para que la app maneje varias PCs. Fuera de `/api` está `GET /ca.crt`, el certificado público de la CA de la PC.
-El WebSocket `/ws` espera el token como primer mensaje y luego envía un JSON por segundo con `hardware`, `system`, `asus` y `controls`.
+El WebSocket `/ws` espera el token como primer mensaje y luego envía un JSON por segundo con `hardware`, `system`, `asus` y `controls`. `controls.caps` dice qué ofrece el sistema (`os`, `powerPlans`, `displays`, `media`, `powerActions`, `autoStartLabel`) para que la web muestre solo lo que funciona.
 
 | Método | Ruta | Cuerpo |
 |---|---|---|
 | POST | `/api/pair` | `{ pin }` → `{ token }` |
 | GET | `/api/hello` | — → `{ app, id, name, port, httpsPort, https[] }` (público) |
 | GET | `/api/peers` | — → otras PCs con InfoPanel en la red |
-| GET | `/api/info` | — |
+| GET | `/api/info` | — → incluye `platform` (`windows` o `linux`) |
 | POST | `/api/audio` | `{ volume?, mute? }` |
 | POST | `/api/brightness` | `{ value }` |
 | POST | `/api/media` | `{ action: playpause\|next\|prev\|stop }` |

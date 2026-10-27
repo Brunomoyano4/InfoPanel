@@ -1,6 +1,13 @@
 # Historial de versiones
 
-Los mismos datos se muestran en la app (Control → App → Historial de versiones) y salen de `src/InfoPanel.Server/wwwroot/changelog.json`.
+Los mismos datos se muestran en la app (Control → App → Historial de versiones) y salen de `src/InfoPanel.Core/wwwroot/changelog.json`.
+
+## 1.5.0 — 2026-10-27
+
+- Versión para Linux: corre como servicio de systemd, también en servidores como Proxmox, y se instala con una sola línea que muestra la dirección, el PIN y un QR en la terminal.
+- En Linux muestra CPU, memoria, GPU (NVIDIA, AMD e Intel), discos, red, ventiladores, batería y procesos, y permite reiniciar, apagar, suspender, cambiar el modo de energía, controlar ventiladores, cerrar procesos y elegir si arranca con el equipo.
+- La app muestra en cada PC solo los controles que su sistema ofrece.
+- Las PCs con Linux también se actualizan desde la app.
 
 ## 1.4.0 — 2026-10-27
 

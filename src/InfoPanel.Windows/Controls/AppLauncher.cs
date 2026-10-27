@@ -1,16 +1,15 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using InfoPanel.Native;
+using InfoPanel.Platform;
 
 namespace InfoPanel.Controls;
-
-public record AppDto(string Id, string Name);
 
 /// <summary>
 /// Aplicaciones instaladas (la carpeta "shell:AppsFolder" de Windows: escritorio y Store) y su lanzamiento.
 /// Solo se pueden abrir apps de esa lista, nunca rutas o comandos arbitrarios.
 /// </summary>
-public sealed class AppLauncher
+public sealed class AppLauncher : IAppLauncher
 {
     private static readonly string[] Noise = { "uninstall", "desinstal", "readme", "help", "ayuda", "website", "sitio web", "documentation", "release notes" };
 

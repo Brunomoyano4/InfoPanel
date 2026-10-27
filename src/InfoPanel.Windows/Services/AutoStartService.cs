@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Security;
 using System.Security.Principal;
 using System.Text;
+using InfoPanel.Platform;
 
 namespace InfoPanel.Services;
 
@@ -9,7 +10,7 @@ namespace InfoPanel.Services;
 /// Inicio automático con Windows mediante una tarea programada con privilegios elevados.
 /// La carpeta "Inicio" o la clave Run no sirven: Windows no lanza ahí apps que requieren administrador.
 /// </summary>
-public sealed class AutoStartService
+public sealed class AutoStartService : IAutoStart
 {
     private const string TaskName = "InfoPanel";
     public const string Arg = "--autostart";

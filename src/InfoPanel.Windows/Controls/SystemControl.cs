@@ -2,17 +2,13 @@ using System.Diagnostics;
 using System.Management;
 using System.Text.RegularExpressions;
 using InfoPanel.Native;
+using InfoPanel.Platform;
 using NAudio.CoreAudioApi;
 
 namespace InfoPanel.Controls;
 
-public record PowerPlanDto(string Guid, string Name, bool Active);
-public record AudioDeviceDto(string Id, string Name, bool Default);
-public record SystemControlStateDto(int? Volume, bool? Muted, int? Brightness, string PowerMode, List<PowerPlanDto> PowerPlans,
-    bool? MicMuted, List<AudioDeviceDto> Outputs);
-
 /// <summary>Controles de Windows: volumen, brillo, multimedia, energía y procesos.</summary>
-public sealed partial class SystemControl
+public sealed partial class SystemControl : ISystemControl
 {
     // Modos de energía de Windows 11 (overlay)
     public static readonly Dictionary<string, Guid> PowerModes = new()

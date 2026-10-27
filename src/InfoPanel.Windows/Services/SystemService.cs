@@ -1,22 +1,13 @@
-using System.Diagnostics;
 using System.Management;
+using InfoPanel.Platform;
 using Microsoft.Win32;
 
 namespace InfoPanel.Services;
 
-public record RamModuleDto(string Slot, string Manufacturer, string Part, long SizeGb, int SpeedMts);
-public record GpuInfoDto(string Name, string Driver);
-public record SystemInfoDto(string Windows, string Bios, string Board, List<RamModuleDto> Ram, List<GpuInfoDto> Gpus);
-
-public record ProcessDto(int Pid, string Name, double Cpu, long MemoryMb);
-public record DiskDto(string Name, string Label, string Format, long TotalGb, long FreeGb);
-// OnAc: true enchufada, false a batería, null sin dato (PC de escritorio o estado desconocido)
-public record SystemDto(long UptimeSec, List<ProcessDto> Processes, List<DiskDto> Disks, bool? OnAc, bool Charging);
-
 /// <summary>Datos de Windows que no cubre LibreHardwareMonitor: procesos, espacio en disco, uptime.</summary>
-public sealed class SystemService
+public sealed class SystemService : ISystemMonitor
 {
-    private readonly Dictionary<int, TimeSpan> _lastCpu = new();
+    private readonly ProcessSampler _processes = new();
     private DateTime _lastSample = DateTime.MinValue;
     private List<ProcessDto> _lastTop = new();
     private List<DiskDto> _lastDisks = new();
@@ -28,7 +19,7 @@ public sealed class SystemService
         // Los procesos se recalculan cada 2 s porque enumerar todos es costoso
         if ((now - _lastSample).TotalSeconds >= 2)
         {
-            _lastTop = SampleProcesses(now);
+            _lastTop = _processes.Sample();
             _lastSample = now;
         }
         if ((now - _lastDiskSample).TotalSeconds >= 30)
@@ -47,44 +38,8 @@ public sealed class SystemService
         return new SystemDto(Environment.TickCount64 / 1000, _lastTop, _lastDisks, onAc, charging);
     }
 
-    private List<ProcessDto> SampleProcesses(DateTime now)
-    {
-        var elapsed = _lastSample == DateTime.MinValue ? 0 : (now - _lastSample).TotalMilliseconds;
-        var cores = Environment.ProcessorCount;
-        var seen = new HashSet<int>();
-        var list = new List<ProcessDto>();
-
-        foreach (var p in Process.GetProcesses())
-        {
-            using (p)
-            {
-                try
-                {
-                    if (p.Id == 0) continue;
-                    var cpu = p.TotalProcessorTime;
-                    seen.Add(p.Id);
-                    double pct = 0;
-                    if (elapsed > 0 && _lastCpu.TryGetValue(p.Id, out var prev))
-                        pct = (cpu - prev).TotalMilliseconds / (elapsed * cores) * 100;
-                    _lastCpu[p.Id] = cpu;
-                    list.Add(new ProcessDto(p.Id, p.ProcessName, Math.Round(pct, 1), p.WorkingSet64 / 1024 / 1024));
-                }
-                catch
-                {
-                    // Procesos protegidos o que terminaron durante la lectura
-                }
-            }
-        }
-
-        foreach (var pid in _lastCpu.Keys.Where(k => !seen.Contains(k)).ToList())
-            _lastCpu.Remove(pid);
-
-        // Se envían todos para que el panel pueda ordenar por cualquier columna
-        return list.OrderByDescending(p => p.Cpu).ThenByDescending(p => p.MemoryMb).ToList();
-    }
-
     /// <summary>Datos fijos del equipo (se leen una vez): Windows, BIOS, placa, RAM y GPUs.</summary>
-    public static SystemInfoDto ReadInfo()
+    public SystemInfoDto ReadInfo()
     {
         static IEnumerable<ManagementObject> Wmi(string query)
         {

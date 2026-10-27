@@ -1,16 +1,15 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.RegularExpressions;
+using InfoPanel.Platform;
 
 namespace InfoPanel.Controls;
-
-public record TdpDto(string Backend, int Min, int Max, int? Spl, int? Sppt, int? Fppt);
 
 /// <summary>
 /// Límites de potencia (TDP) en watts. Usa el ACPI de ASUS si está disponible;
 /// si no, ryzenadj.exe ubicado en la carpeta tools/ junto al ejecutable (CPUs AMD Ryzen).
 /// </summary>
-public sealed class TdpControl
+public sealed class TdpControl : ITdpControl
 {
     private static readonly string RyzenAdjPath = Path.Combine(AppContext.BaseDirectory, "tools", "ryzenadj.exe");
 

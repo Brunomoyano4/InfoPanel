@@ -745,7 +745,7 @@ const METRICS = {
       const si = info?.system;
       if (!si) return null;
       return `${head('info', 'Sistema')}<div class="sys">
-        <div class="row"><span>Windows</span><span class="v r">${esc(si.windows)}</span></div>
+        <div class="row"><span>${info.platform === 'linux' ? 'Sistema' : 'Windows'}</span><span class="v r">${esc(si.windows)}</span></div>
         <div class="row"><span>Encendido hace</span><span class="v r">${fmtDuration(d.system?.uptimeSec)}</span></div>
         ${(info.urls || []).map(u => `<div class="row"><span>Dirección</span><span class="v r">${esc(u.replace('http://', ''))}</span></div>`).join('')}
         <div class="row"><span>Placa</span><span class="v r">${esc(si.board)}</span></div>
@@ -1204,6 +1204,9 @@ $('#processes').addEventListener('click', e => {
 // ================= Control =================
 let controlBuilt = false;
 let curves = [];
+// Qué ofrece el sistema de la PC (lo manda cada PC; las versiones anteriores a Linux no lo mandan y son Windows)
+const WINDOWS_CAPS = { os: 'windows', powerPlans: true, displays: true, media: true, powerActions: ['lock', 'sleep', 'hibernate', 'restart', 'shutdown'], autoStartLabel: 'Windows' };
+const POWER_BTNS = [['lock', 'Bloquear', ''], ['sleep', 'Suspender', ''], ['hibernate', 'Hibernar', ''], ['restart', 'Reiniciar', ' danger'], ['shutdown', 'Apagar', ' danger']];
 let curveFan = 'cpu';
 
 function slider(id, label, min, max, step = 1) {
@@ -1226,18 +1229,19 @@ function bindSlider(id, onChange, suffix = '') {
 
 function buildControl(d) {
   const c = d.controls;
+  const caps = c.caps || WINDOWS_CAPS;
   const html = [];
 
   // Slider con un ícono (o botón) adelante en lugar de una etiqueta de texto
   const iconSlider = (id, lead) => `<div class="slider icon-row">${lead}<input type="range" id="${id}" min="0" max="100" aria-label="${id === 'vol' ? 'Volumen' : 'Brillo'}"><span class="v" id="${id}-v"></span></div>`;
-  html.push(`<div class="card" data-cat="sound"><h3>${icon('volume')}<span>Sonido y pantalla</span></h3>
-    ${iconSlider('vol', `<button class="btn icon" id="mute" aria-label="Silenciar">${icon('volume', 20)}</button>`)}
+  if (c.system.volume != null || c.system.brightness != null || c.system.micMuted != null) html.push(`<div class="card" data-cat="sound"><h3>${icon('volume')}<span>Sonido y pantalla</span></h3>
+    ${c.system.volume != null ? iconSlider('vol', `<button class="btn icon" id="mute" aria-label="Silenciar">${icon('volume', 20)}</button>`) : ''}
     ${c.system.brightness != null ? iconSlider('bright', `<span class="lead-ico">${icon('sun', 20)}</span>`) : ''}
     ${c.system.micMuted != null ? `<div class="switch-row"><span>Micrófono</span><button class="switch" id="mic" role="switch" aria-checked="true" aria-label="Micrófono activo"></button></div>` : ''}
     ${c.system.outputs.length > 1 ? '<label class="field-row"><span>Salida</span><select id="output"></select></label>' : ''}
   </div>`);
 
-  html.push(`<div class="card" data-cat="sound"><h3>Multimedia</h3>
+  if (caps.media) html.push(`<div class="card" data-cat="sound"><h3>Multimedia</h3>
     <div class="media">
       <button class="btn" data-media="prev" aria-label="Anterior"><b>⏮</b><span>Anterior</span></button>
       <button class="btn" data-media="playpause" aria-label="Play o pausa"><b>⏯</b><span>Play/Pausa</span></button>
@@ -1245,7 +1249,7 @@ function buildControl(d) {
     </div></div>`);
 
   // Son dos ajustes distintos de Windows: el modo va encima del plan, por eso se explican en la tarjeta
-  html.push(`<div class="card" data-cat="power"><h3>Energía de Windows</h3>
+  if (caps.powerPlans) html.push(`<div class="card" data-cat="power"><h3>Energía de Windows</h3>
     <span class="flabel">Modo de energía</span>
     <div class="seg" id="pmode">
       <button data-v="efficiency">Eficiencia</button><button data-v="balanced">Equilibrado</button><button data-v="performance">Rendimiento</button>
@@ -1254,6 +1258,14 @@ function buildControl(d) {
     <span class="flabel plan-label">Plan de energía</span>
     <select id="plan"></select>
     <p class="note">El esquema clásico (Panel de control → Opciones de energía): define reglas como cuándo suspender o los estados del procesador. Armoury Crate cambia el plan con cada modo ASUS.</p>
+  </div>`);
+  // Linux: un solo ajuste, si el equipo lo permite
+  else if (c.system.powerMode !== 'unknown') html.push(`<div class="card" data-cat="power"><h3>Energía</h3>
+    <span class="flabel">Modo de energía</span>
+    <div class="seg" id="pmode">
+      <button data-v="efficiency">Eficiencia</button><button data-v="balanced">Equilibrado</button><button data-v="performance">Rendimiento</button>
+    </div>
+    <p class="note">El perfil de energía del sistema (power-profiles-daemon) o, si no está, la preferencia de energía del procesador.</p>
   </div>`);
 
   if (d.asus?.available) html.push(`<div class="card" data-cat="fans"><h3>ASUS · Modo y ventiladores</h3>
@@ -1283,7 +1295,7 @@ function buildControl(d) {
       <div class="btns"><button class="btn sm" data-lfauto="${i}">Automático</button></div>`).join('')}
   </div>`);
 
-  html.push(`<div class="card" data-cat="display"><h3>Pantallas</h3>
+  if (caps.displays) html.push(`<div class="card" data-cat="display"><h3>Pantallas</h3>
     <div class="dlayout" id="dlayout" aria-label="Disposición de las pantallas"></div>
     <div class="dlayout-actions hidden" id="dl-actions">
       <span class="note">Soltá la pantalla junto a otra.</span><span class="spacer"></span>
@@ -1309,11 +1321,7 @@ function buildControl(d) {
     </div>` : ''}
     <div class="card compact"><h3>Equipo</h3>
       <div class="power-btns">
-        <button class="btn sm" data-power="lock">Bloquear</button>
-        <button class="btn sm" data-power="sleep">Suspender</button>
-        <button class="btn sm" data-power="hibernate">Hibernar</button>
-        <button class="btn sm danger" data-power="restart">Reiniciar</button>
-        <button class="btn sm danger" data-power="shutdown">Apagar</button>
+        ${POWER_BTNS.filter(([a]) => caps.powerActions.includes(a)).map(([a, l, cls]) => `<button class="btn sm${cls}" data-power="${a}">${l}</button>`).join('')}
       </div>
     </div>
   </div>`);
@@ -1322,7 +1330,7 @@ function buildControl(d) {
     <p class="note">Tema</p>
     <div class="themes" id="themes">${THEMES.map(t => `<button data-theme="${t.id}" title="${t.name}"><i style="background:${t.swatch}"></i>${t.name}</button>`).join('')}<button data-theme="custom" title="Personalizado"><i></i>Personalizado</button></div>
     ${themeEditorHtml()}
-    <label class="toggle"><input type="checkbox" id="autostart"> Iniciar InfoPanel con Windows</label>
+    <label class="toggle"><input type="checkbox" id="autostart"> Iniciar InfoPanel con ${caps.autoStartLabel}</label>
     <div class="update-box" id="update-box"></div>
     <div class="pair-btns">
       <button class="btn" id="show-changelog">Historial de versiones</button>
@@ -1337,8 +1345,10 @@ function buildControl(d) {
   buildControlCats();
 
   // --- Eventos ---
-  bindSlider('vol', v => act('/audio', { volume: v }));
-  $('#mute').onclick = () => toggleMute('muted', '/audio');
+  if ($('#vol')) {
+    bindSlider('vol', v => act('/audio', { volume: v }));
+    $('#mute').onclick = () => toggleMute('muted', '/audio');
+  }
   if ($('#mic')) $('#mic').onclick = () => toggleMute('micMuted', '/mic');
   if ($('#output')) $('#output').onchange = e => act('/audio/output', { action: e.target.value }, 'Salida cambiada');
   if ($('#bright')) bindSlider('bright', v => act('/brightness', { value: v }));
@@ -1351,8 +1361,8 @@ function buildControl(d) {
   markTheme();
 
   document.querySelectorAll('[data-media]').forEach(b => b.onclick = () => act('/media', { action: b.dataset.media }));
-  $('#pmode').onclick = e => { const b = e.target.closest('button'); if (b) act('/powermode', { action: b.dataset.v }, 'Modo cambiado'); };
-  $('#plan').onchange = e => act('/powerplan', { action: e.target.value }, 'Plan cambiado');
+  if ($('#pmode')) $('#pmode').onclick = e => { const b = e.target.closest('button'); if (b) act('/powermode', { action: b.dataset.v }, 'Modo cambiado'); };
+  if ($('#plan')) $('#plan').onchange = e => act('/powerplan', { action: e.target.value }, 'Plan cambiado');
 
   // Todo menos bloquear pide confirmación en una ventana propia (el confirm() del navegador se
   // puede desactivar en el celu con "no permitir más diálogos" y la acción saldría sin preguntar)
@@ -1398,6 +1408,23 @@ function buildControl(d) {
   document.querySelectorAll('[data-lfauto]').forEach(b => b.onclick = () =>
     act('/fans/lhm', { id: c.lhmFans[+b.dataset.lfauto].id, percent: null }, 'Ventilador en automático'));
 
+  if ($('#displays')) bindDisplays();
+  $('#autostart').onchange = async e => {
+    touched.autostart = Date.now();
+    const on = e.target.checked;
+    if (!await act('/autostart', { enabled: on }, on ? `Se iniciará con ${caps.autoStartLabel}` : `Ya no se inicia con ${caps.autoStartLabel}`)) e.target.checked = !on;
+  };
+
+  $('#show-changelog').onclick = () => showChangelog();
+  $('#show-tour').onclick = () => startTour();
+  $('#logout').onclick = () => { if (confirm('¿Desvincular este dispositivo de esta PC?')) unpairCurrent(); };
+  $('#revoke').onclick = async () => { if (confirm('¿Desvincular todos los dispositivos? Habrá que volver a ingresar el PIN.')) { await act('/unpair-all', {}); unpairCurrent(); } };
+
+  controlBuilt = true;
+}
+
+// Pantallas: resolución y Hz, mapa, modos y presets (solo si el sistema las controla)
+function bindDisplays() {
   $('#displays').onchange = async e => {
     const box = e.target.closest('.dmode');
     if (!box) return;
@@ -1434,18 +1461,6 @@ function buildControl(d) {
     if (apply) act('/display/preset/apply', { action: apply.dataset.apply }, `Preset "${apply.dataset.apply}" aplicado`);
     if (del && confirm(`¿Borrar el preset "${del.dataset.del}"?`)) act('/display/preset/delete', { action: del.dataset.del }, 'Preset borrado');
   };
-  $('#autostart').onchange = async e => {
-    touched.autostart = Date.now();
-    const on = e.target.checked;
-    if (!await act('/autostart', { enabled: on }, on ? 'Se iniciará con Windows' : 'Ya no se inicia con Windows')) e.target.checked = !on;
-  };
-
-  $('#show-changelog').onclick = () => showChangelog();
-  $('#show-tour').onclick = () => startTour();
-  $('#logout').onclick = () => { if (confirm('¿Desvincular este dispositivo de esta PC?')) unpairCurrent(); };
-  $('#revoke').onclick = async () => { if (confirm('¿Desvincular todos los dispositivos? Habrá que volver a ingresar el PIN.')) { await act('/unpair-all', {}); unpairCurrent(); } };
-
-  controlBuilt = true;
 }
 
 function updateControl(d) {
@@ -1454,7 +1469,7 @@ function updateControl(d) {
   if (!controlBuilt) buildControl(d);
 
   setSlider('vol', c.system.volume);
-  if ($('#mute').dataset.muted !== String(c.system.muted)) {
+  if ($('#mute') && $('#mute').dataset.muted !== String(c.system.muted)) {
     $('#mute').dataset.muted = String(c.system.muted);
     $('#mute').innerHTML = icon(c.system.muted ? 'mute' : 'volume', 20);
     $('#mute').setAttribute('aria-label', c.system.muted ? 'Activar sonido' : 'Silenciar');
@@ -1465,7 +1480,7 @@ function updateControl(d) {
   document.querySelectorAll('#pmode button').forEach(b => b.classList.toggle('on', b.dataset.v === c.system.powerMode));
   const plan = $('#plan');
   const sig = c.system.powerPlans.map(p => p.guid + p.active).join();
-  if (plan.dataset.sig !== sig) {
+  if (plan && plan.dataset.sig !== sig) {
     plan.dataset.sig = sig;
     plan.innerHTML = c.system.powerPlans.map(p => `<option value="${p.guid}" ${p.active ? 'selected' : ''}>${esc(p.name)}</option>`).join('');
   }
@@ -1496,6 +1511,12 @@ function updateControl(d) {
   }
   document.querySelectorAll('#blimit button').forEach(b => b.classList.toggle('on', +b.dataset.v === c.batteryLimit));
 
+  if ($('#displays')) updateDisplays(c);
+  if (Date.now() - (touched.autostart || 0) > 3000) $('#autostart').checked = c.autoStart;
+  renderUpdate(c.update);
+}
+
+function updateDisplays(c) {
   renderDisplayLayout(c.displayLayout || []);
   if (Date.now() - (touched.topo || 0) > 6000) markTopology(topologyOf(c.displayLayout || []));
 
@@ -1525,9 +1546,6 @@ function updateControl(d) {
       <div class="btns"><button class="btn sm primary" data-apply="${esc(p.name)}">Aplicar</button><button class="btn sm danger" data-del="${esc(p.name)}" aria-label="Borrar">✕</button></div>
     </div>`).join('') || '<p class="note">Todavía no hay presets.</p>';
   }
-
-  if (Date.now() - (touched.autostart || 0) > 3000) $('#autostart').checked = c.autoStart;
-  renderUpdate(c.update);
 }
 
 // ---------- Categorías y búsqueda de Control ----------

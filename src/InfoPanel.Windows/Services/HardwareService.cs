@@ -1,22 +1,21 @@
+using InfoPanel.Platform;
 using LibreHardwareMonitor.Hardware;
 
 namespace InfoPanel.Services;
 
-public record SensorDto(string Id, string Name, string Type, float? Value, float? Min, float? Max);
-public record HardwareDto(string Id, string Name, string Type, List<SensorDto> Sensors);
-public record FanControlDto(string Id, string Name, string Hardware, string Mode, float? Value, float Min, float Max);
-
 /// <summary>
 /// Lectura de sensores vía LibreHardwareMonitor (CPU, GPU, RAM, placa, discos, red, batería)
-/// y control de ventiladores de placas compatibles.
+/// y control de ventiladores de placas compatibles. Suma los sensores alternativos del CPU (CpuFallbackService).
 /// </summary>
-public sealed class HardwareService : IDisposable
+public sealed class HardwareService : IHardwareMonitor
 {
     private readonly Computer _computer;
+    private readonly CpuFallbackService _cpuFallback;
     private readonly object _lock = new();
 
-    public HardwareService()
+    public HardwareService(CpuFallbackService cpuFallback)
     {
+        _cpuFallback = cpuFallback;
         _computer = new Computer
         {
             IsCpuEnabled = true,
@@ -49,6 +48,7 @@ public sealed class HardwareService : IDisposable
             foreach (var hw in _computer.Hardware)
                 Collect(hw, result);
         }
+        _cpuFallback.Augment(result);
         return result;
     }
 

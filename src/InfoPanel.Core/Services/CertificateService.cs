@@ -110,7 +110,12 @@ public sealed class CertificateService
 
     private static bool IsLinkLocal(IPAddress ip) => ip.GetAddressBytes() is [169, 254, ..];
 
+    // En Linux: Docker, libvirt, interfaces de VMs/contenedores y los puentes del firewall de Proxmox.
+    // vmbr0 no se descarta: en Proxmox es el puente que tiene la IP del equipo.
+    private static readonly string[] LinuxVirtualPrefixes = { "docker", "veth", "virbr", "br-", "tap", "fwbr", "fwpr", "fwln", "lxcbr", "vnet" };
+
     private static bool IsVirtual(NetworkInterface n) =>
         new[] { "Hyper-V", "vEthernet", "VirtualBox", "VMware", "WSL", "Wi-Fi Direct", "Bluetooth" }
-            .Any(v => n.Description.Contains(v, StringComparison.OrdinalIgnoreCase) || n.Name.Contains(v, StringComparison.OrdinalIgnoreCase));
+            .Any(v => n.Description.Contains(v, StringComparison.OrdinalIgnoreCase) || n.Name.Contains(v, StringComparison.OrdinalIgnoreCase))
+        || LinuxVirtualPrefixes.Any(p => n.Name.StartsWith(p, StringComparison.Ordinal));
 }

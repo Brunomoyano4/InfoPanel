@@ -1,22 +1,15 @@
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using InfoPanel.Native;
+using InfoPanel.Platform;
 
 namespace InfoPanel.Controls;
-
-public record DisplayDto(string Name, bool Internal, int Width, int Height, double RefreshHz, int X, int Y, int Rotation, bool Primary, string? Device = null);
-public record DisplayModeDto(int Width, int Height, List<int> Hz);
-public record DisplayPresetDto(string Name, List<DisplayDto> Displays);
-// Pantalla conectada (prendida o no) para el editor de disposición. Id identifica la salida mientras
-// la PC esté encendida; X/Y/Width/Height son 0 si está apagada.
-public record LayoutDisplayDto(string Id, string Name, bool Internal, bool Active, bool Primary, int X, int Y, int Width, int Height);
-public record LayoutPlacement(string Id, int X, int Y);
 
 /// <summary>
 /// Pantallas conectadas y presets de configuración (orden/posición, resolución, Hz, principal, cuáles activas).
 /// Un preset guarda la configuración CCD completa de Windows y la vuelve a aplicar tal cual.
 /// </summary>
-public sealed class DisplayControl
+public sealed class DisplayControl : IDisplayControl
 {
     private static readonly string PresetsPath = Path.Combine(AppContext.BaseDirectory, "display-presets.json");
     private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };

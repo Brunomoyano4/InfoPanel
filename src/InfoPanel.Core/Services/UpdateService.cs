@@ -1,8 +1,8 @@
-using System.Diagnostics;
 using System.Net.Http.Json;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.Json.Serialization;
+using InfoPanel.Platform;
 
 namespace InfoPanel.Services;
 
@@ -11,17 +11,16 @@ public record UpdateStateDto(string Current, string? Latest, bool Available, str
     string Status, string? Error, int Progress, bool CanInstall, DateTime? CheckedAt, bool CheckFailed);
 
 /// <summary>
-/// Actualizaciones desde el repositorio público de releases (el código es privado; ahí solo se publica el .exe).
-/// Revisa al arrancar y cada 6 horas. Instalar descarga el .exe nuevo, verifica su SHA-256 contra el que
-/// informa GitHub, lo pone en lugar del actual (el que corre se renombra a .old, Windows lo permite) y
-/// arranca el nuevo, que espera a que este proceso termine. Configuración, certificados y dashboards
-/// están junto al .exe y no se tocan.
+/// Actualizaciones desde el repositorio público de releases (el código es privado; ahí solo se publican los
+/// ejecutables, uno por sistema). Revisa al arrancar y cada 6 horas. Instalar descarga el ejecutable nuevo,
+/// verifica su SHA-256 contra el que informa GitHub, lo pone en lugar del actual (el que corre se renombra
+/// a .old, Windows y Linux lo permiten) y arranca el nuevo según el sistema (IUpdatePlatform).
+/// Configuración, certificados y dashboards están junto al ejecutable y no se tocan.
 /// </summary>
 public sealed class UpdateService : BackgroundService
 {
     public const string Repo = "Brunomoyano4/InfoPanel-releases";
     public const string AfterUpdateArg = "--after-update";
-    private const string AssetName = "InfoPanel.exe";
 
     // Para probar con un servidor local: INFOPANEL_UPDATE_URL apunta a un JSON con el formato de la API de GitHub
     private static readonly string ApiUrl = Environment.GetEnvironmentVariable("INFOPANEL_UPDATE_URL")
@@ -30,11 +29,12 @@ public sealed class UpdateService : BackgroundService
     public static readonly Version CurrentVersion = Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0);
     public static string CurrentText => $"{CurrentVersion.Major}.{CurrentVersion.Minor}.{CurrentVersion.Build}";
 
-    // Solo el .exe único publicado puede reemplazarse a sí mismo; en desarrollo hay una .dll al lado
+    // Solo el ejecutable único publicado puede reemplazarse a sí mismo; en desarrollo hay una .dll al lado
     public static bool CanInstall => !File.Exists(Path.Combine(AppContext.BaseDirectory, "InfoPanel.dll"));
 
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromMinutes(5) };
     private readonly ILogger<UpdateService> _log;
+    private readonly IUpdatePlatform _platform;
     private readonly object _lock = new();
     private Release? _release;
     private string _status = "idle"; // idle | checking | downloading | installing | error
@@ -48,8 +48,9 @@ public sealed class UpdateService : BackgroundService
     /// <summary>Se dispara la primera vez que se encuentra una versión nueva (para avisar en la bandeja).</summary>
     public event Action<string>? UpdateFound;
 
-    public UpdateService(ILogger<UpdateService> log)
+    public UpdateService(IUpdatePlatform platform, ILogger<UpdateService> log)
     {
+        _platform = platform;
         _log = log;
         _http.DefaultRequestHeaders.UserAgent.ParseAdd($"InfoPanel/{CurrentText}");
         CleanupOld();
@@ -113,7 +114,7 @@ public sealed class UpdateService : BackgroundService
     /// <summary>Descarga e instala la versión nueva en segundo plano. Devuelve un error si no se puede empezar.</summary>
     public string? StartInstall()
     {
-        if (!CanInstall) return "La actualización automática solo funciona con el InfoPanel.exe publicado";
+        if (!CanInstall) return "La actualización automática solo funciona con el ejecutable publicado";
         Release release;
         Asset asset;
         lock (_lock)
@@ -121,8 +122,8 @@ public sealed class UpdateService : BackgroundService
             if (_status is "downloading" or "installing") return null;
             if (_release is null || !(_release.Version > CurrentVersion)) return "No hay una versión nueva";
             release = _release;
-            asset = release.Assets.FirstOrDefault(a => a.Name.Equals(AssetName, StringComparison.OrdinalIgnoreCase))!;
-            if (asset is null) return "El release no tiene InfoPanel.exe";
+            asset = release.Assets.FirstOrDefault(a => a.Name.Equals(_platform.AssetName, StringComparison.OrdinalIgnoreCase))!;
+            if (asset is null) return $"El release no tiene {_platform.AssetName}";
             if (asset.Digest is not { } d || !d.StartsWith("sha256:")) return "El release no informa la huella del archivo; no se puede verificar";
             (_status, _error, _progress) = ("downloading", null, 0);
         }
@@ -134,8 +135,7 @@ public sealed class UpdateService : BackgroundService
     {
         var exe = Environment.ProcessPath!;
         var dir = Path.GetDirectoryName(exe)!;
-        var newPath = Path.Combine(dir, "InfoPanel.new.exe");
-        var oldPath = Path.Combine(dir, "InfoPanel.old.exe");
+        var (newPath, oldPath) = (Sibling(exe, ".new"), Sibling(exe, ".old"));
         try
         {
             // Descarga con progreso
@@ -163,14 +163,16 @@ public sealed class UpdateService : BackgroundService
                 hash = Convert.ToHexStringLower(await SHA256.HashDataAsync(f));
             if (!asset.Digest!.Equals("sha256:" + hash, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("El archivo descargado no coincide con el publicado");
+            if (!OperatingSystem.IsWindows())
+                File.SetUnixFileMode(newPath, (UnixFileMode)0b111_101_101); // 755: ejecutable
 
-            // Reemplazo: el .exe en uso se puede renombrar (no borrar); el nuevo toma su nombre
+            // Reemplazo: el ejecutable en uso se puede renombrar; el nuevo toma su nombre
             if (File.Exists(oldPath)) File.Delete(oldPath);
             File.Move(exe, oldPath);
             try { File.Move(newPath, exe); }
             catch { File.Move(oldPath, exe); throw; }
 
-            Process.Start(new ProcessStartInfo(exe, $"{AfterUpdateArg} {AutoStartService.Arg}") { UseShellExecute = false, WorkingDirectory = dir });
+            _platform.Relaunch(exe);
             RestartRequested?.Invoke();
         }
         catch (Exception ex)
@@ -181,10 +183,15 @@ public sealed class UpdateService : BackgroundService
         }
     }
 
-    // El .exe anterior queda renombrado hasta el próximo arranque (mientras corría no se podía borrar)
+    // InfoPanel.exe → InfoPanel.old.exe; InfoPanel (Linux) → InfoPanel.old
+    private static string Sibling(string exe, string suffix) =>
+        Path.Combine(Path.GetDirectoryName(exe)!, Path.GetFileNameWithoutExtension(exe) + suffix + Path.GetExtension(exe));
+
+    // El ejecutable anterior queda renombrado hasta el próximo arranque (en Windows, mientras corría no se podía borrar)
     private static void CleanupOld()
     {
-        var old = Path.Combine(AppContext.BaseDirectory, "InfoPanel.old.exe");
+        if (Environment.ProcessPath is not { } exe) return;
+        var old = Sibling(exe, ".old");
         for (int i = 0; i < 10 && File.Exists(old); i++)
         {
             try { File.Delete(old); }

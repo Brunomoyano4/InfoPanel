@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/InfoPanel.Core/InfoPanel.Core.csproj" />
+    <Project Path="src/InfoPanel.Linux/InfoPanel.Linux.csproj" />
+    <Project Path="src/InfoPanel.Windows/InfoPanel.Windows.csproj" />
+  </Folder>
+</Solution>

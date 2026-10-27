@@ -1,21 +1,16 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
+  <!-- InfoPanel para Windows: ícono en la bandeja, LibreHardwareMonitor, audio de Windows, pantallas, ASUS y TDP.
+       El servidor, la API y la web vienen de InfoPanel.Core -->
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
     <!-- Sin consola: corre con un ícono en la bandeja -->
     <OutputType>WinExe</OutputType>
     <UseWindowsForms>true</UseWindowsForms>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <RootNamespace>InfoPanel</RootNamespace>
     <AssemblyName>InfoPanel</AssemblyName>
-    <InvariantGlobalization>true</InvariantGlobalization>
-    <!-- La web también va embebida en el ejecutable (para publicar un solo .exe) -->
-    <GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>
-    <Version>1.4.0</Version>
-    <Product>InfoPanel</Product>
     <Description>Telemetría y control de PCs con Windows desde el celular</Description>
   </PropertyGroup>
 
@@ -33,11 +28,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\InfoPanel.Core\InfoPanel.Core.csproj" />
     <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.6" />
     <PackageReference Include="NAudio.Wasapi" Version="2.2.1" />
     <PackageReference Include="System.Management" Version="10.0.14" />
     <PackageReference Include="QRCoder" Version="1.8.0" />
-    <PackageReference Include="Microsoft.Extensions.FileProviders.Embedded" Version="10.0.14" />
   </ItemGroup>
 
   <ItemGroup>
@@ -47,10 +42,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- En desarrollo la web se sirve desde la carpeta del ejecutable (se puede actualizar sin recompilar);
-         publicada, va solo embebida -->
-    <Content Update="wwwroot\**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
-    <EmbeddedResource Include="wwwroot\**" />
     <None Update="tools\**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

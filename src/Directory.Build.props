@@ -1,0 +1,14 @@
+<Project>
+  <!-- Comunes a InfoPanel.Core, InfoPanel.Windows e InfoPanel.Linux: la versión se sube solo acá -->
+  <PropertyGroup>
+    <Version>1.5.0</Version>
+    <Product>InfoPanel</Product>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+  <!-- Publicado: sin archivos de depuración al lado del ejecutable -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+</Project>

@@ -1,20 +1,20 @@
 using System.Text.Json;
-using InfoPanel.Controls;
+using InfoPanel.Platform;
 
 namespace InfoPanel.Services;
 
 /// <summary>Cada segundo lee todo y lo envía a los clientes conectados.</summary>
 public sealed class TelemetryLoop : BackgroundService
 {
-    private readonly HardwareService _hw;
-    private readonly SystemService _sys;
-    private readonly SystemControl _sysCtl;
-    private readonly AsusControl _asus;
-    private readonly TdpControl _tdp;
-    private readonly DisplayControl _display;
-    private readonly CpuFallbackService _cpuFallback;
+    private readonly IHardwareMonitor _hw;
+    private readonly ISystemMonitor _sys;
+    private readonly ISystemControl _sysCtl;
+    private readonly IAsusControl _asus;
+    private readonly ITdpControl _tdp;
+    private readonly IDisplayControl _display;
+    private readonly IAutoStart _autoStart;
+    private readonly IPlatformInfo _platform;
     private readonly UpdateService _update;
-    private readonly AutoStartService _autoStart;
     private readonly TelemetryHub _hub;
     private readonly JsonSerializerOptions _json;
     private readonly ILogger<TelemetryLoop> _log;
@@ -22,12 +22,12 @@ public sealed class TelemetryLoop : BackgroundService
     private object? _controls;
     private DateTime _controlsRead = DateTime.MinValue;
 
-    public TelemetryLoop(HardwareService hw, SystemService sys, SystemControl sysCtl, AsusControl asus, TdpControl tdp,
-        DisplayControl display, AutoStartService autoStart, CpuFallbackService cpuFallback, UpdateService update, TelemetryHub hub,
+    public TelemetryLoop(IHardwareMonitor hw, ISystemMonitor sys, ISystemControl sysCtl, IAsusControl asus, ITdpControl tdp,
+        IDisplayControl display, IAutoStart autoStart, IPlatformInfo platform, UpdateService update, TelemetryHub hub,
         JsonSerializerOptions json, ILogger<TelemetryLoop> log)
     {
         (_hw, _sys, _sysCtl, _asus, _tdp, _hub, _json, _log) = (hw, sys, sysCtl, asus, tdp, hub, json, log);
-        (_display, _autoStart, _cpuFallback, _update) = (display, autoStart, cpuFallback, update);
+        (_display, _autoStart, _platform, _update) = (display, autoStart, platform, update);
     }
 
     /// <summary>Fuerza a releer el estado de los controles en el próximo ciclo (después de un cambio).</summary>
@@ -46,6 +46,7 @@ public sealed class TelemetryLoop : BackgroundService
                 {
                     _controls = new
                     {
+                        caps = _platform.Caps,
                         system = _sysCtl.GetState(),
                         tdp = _tdp.GetState(),
                         lhmFans = _hw.GetFanControls(),
@@ -60,13 +61,10 @@ public sealed class TelemetryLoop : BackgroundService
                     _controlsRead = DateTime.UtcNow;
                 }
 
-                var hardware = _hw.Update();
-                _cpuFallback.Augment(hardware);
-
                 var payload = new
                 {
                     time = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                    hardware,
+                    hardware = _hw.Update(),
                     system = _sys.Sample(),
                     asus = _asus.GetState(),
                     controls = _controls,

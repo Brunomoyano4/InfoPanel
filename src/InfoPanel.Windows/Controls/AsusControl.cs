@@ -1,11 +1,9 @@
+using InfoPanel.Platform;
+
 namespace InfoPanel.Controls;
 
-public record AsusFanDto(string Fan, int Rpm);
-public record FanCurveDto(string Fan, int[] Temps, int[] Speeds);
-public record AsusStateDto(bool Available, int Mode, string ModeName, List<AsusFanDto> Fans);
-
 /// <summary>Modos de rendimiento y curvas de ventilador de equipos ASUS (ROG Ally, laptops ROG/TUF).</summary>
-public sealed class AsusControl
+public sealed class AsusControl : IAsusControl
 {
     public static readonly string[] ModeNames = { "Balanced", "Turbo", "Silent" };
 

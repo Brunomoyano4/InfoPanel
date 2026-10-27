@@ -387,11 +387,14 @@ function renderControlWidget(w, d) {
   const c = d.controls;
   if (!c) return null;
   const t = `<h3>${esc(widgetTitle(w))}</h3>`;
+  // Lo que el sistema de la PC no ofrece no se muestra (por ejemplo, audio en un servidor Linux)
+  const caps = c.caps || WINDOWS_CAPS;
   const seg = (items, cur, act) => `<div class="seg">${items.map(([v, l]) =>
     `<button class="${String(v) === String(cur) ? 'on' : ''}" data-act="${act}" data-v="${v}">${l}</button>`).join('')}</div>`;
 
   switch (w.cfg.control) {
     case 'volume':
+      if (c.system.volume == null) return null;
       return `${t}<div class="wslider icon">
         <button class="btn sm" data-act="mute" aria-label="${c.system.muted ? 'Activar sonido' : 'Silenciar'}">${c.system.muted ? '🔇' : '🔊'}</button>
         <input type="range" min="0" max="100" value="${c.system.volume ?? 0}" data-act="volume"><span>${c.system.volume ?? '—'}</span></div>`;
@@ -399,6 +402,7 @@ function renderControlWidget(w, d) {
       if (c.system.brightness == null) return null;
       return `${t}<div class="wslider icon"><b aria-hidden="true">☀</b><input type="range" min="0" max="100" value="${c.system.brightness}" data-act="brightness"><span>${c.system.brightness}</span></div>`;
     case 'media':
+      if (!caps.media) return null;
       return `${t}<div class="media">
         <button class="btn" data-act="media" data-v="prev" aria-label="Anterior"><b>⏮</b></button>
         <button class="btn" data-act="media" data-v="playpause" aria-label="Play o pausa"><b>⏯</b></button>
@@ -407,6 +411,7 @@ function renderControlWidget(w, d) {
       if (c.system.micMuted == null) return null;
       return `${t}<button class="btn big-btn ${c.system.micMuted ? 'danger' : ''}" data-act="mic">${c.system.micMuted ? '🎙 Silenciado' : '🎙 Activo'}</button>`;
     case 'powerMode':
+      if (c.system.powerMode === 'unknown') return null;
       return t + seg([['efficiency', 'Eficiencia'], ['balanced', 'Equilibrado'], ['performance', 'Rendim.']], c.system.powerMode, 'powerMode');
     case 'asusMode':
       if (!d.asus?.available) return null;
@@ -425,8 +430,11 @@ function renderControlWidget(w, d) {
       if (!mode) return null;
       return t + seg(mode.hz.map(h => [h, h + ' Hz']), Math.round(disp.refreshHz), 'displayHz');
     }
-    case 'power':
-      return `${t}<div class="btns"><button class="btn sm" data-act="power" data-v="lock">Bloquear</button><button class="btn sm" data-act="power" data-v="sleep">Suspender</button></div>`;
+    case 'power': {
+      const btns = [['lock', 'Bloquear'], ['sleep', 'Suspender']].filter(([a]) => caps.powerActions.includes(a));
+      if (!btns.length) return null;
+      return `${t}<div class="btns">${btns.map(([a, l]) => `<button class="btn sm" data-act="power" data-v="${a}">${l}</button>`).join('')}</div>`;
+    }
   }
   return null;
 }

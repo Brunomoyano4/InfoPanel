@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Lo común a Windows y Linux: servidor web, API, vinculación, certificados, descubrimiento,
+       dashboards, actualizaciones y la web. Lo que depende del sistema se pide por las interfaces de Platform/ -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>InfoPanel</RootNamespace>
+    <AssemblyName>InfoPanel.Core</AssemblyName>
+    <!-- La web va embebida en el ejecutable (para publicar un solo archivo) -->
+    <GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Los mismos using implícitos que un proyecto web -->
+    <Using Include="Microsoft.AspNetCore.Builder" />
+    <Using Include="Microsoft.AspNetCore.Hosting" />
+    <Using Include="Microsoft.AspNetCore.Http" />
+    <Using Include="Microsoft.AspNetCore.Routing" />
+    <Using Include="Microsoft.Extensions.DependencyInjection" />
+    <Using Include="Microsoft.Extensions.Hosting" />
+    <Using Include="Microsoft.Extensions.Logging" />
+    <Using Include="System.Net.Http.Json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.Extensions.FileProviders.Embedded" Version="10.0.14" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- En desarrollo la web se sirve desde la carpeta del ejecutable (se puede actualizar sin recompilar);
+         publicada, va solo embebida -->
+    <EmbeddedResource Include="wwwroot\**" />
+    <None Include="wwwroot\**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
+  </ItemGroup>
+
+</Project>
