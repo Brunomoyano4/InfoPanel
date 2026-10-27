@@ -7,6 +7,12 @@ using InfoPanel.Services;
 
 // Una sola instancia: dos procesos chocarían por el puerto y por el hardware
 using var instance = new Mutex(true, @"Global\InfoPanel", out var isFirst);
+// Recién actualizado: la versión anterior todavía está cerrándose, se espera a que suelte la instancia
+if (!isFirst && args.Contains(UpdateService.AfterUpdateArg))
+{
+    try { isFirst = instance.WaitOne(TimeSpan.FromSeconds(30)); }
+    catch (AbandonedMutexException) { isFirst = true; } // terminó sin liberarla: igual queda tomada
+}
 if (!isFirst)
 {
     System.Windows.Forms.MessageBox.Show("InfoPanel ya está en ejecución (ícono en la bandeja).", "InfoPanel");
@@ -50,6 +56,8 @@ builder.Services.AddSingleton<AutoStartService>();
 builder.Services.AddSingleton<CpuFallbackService>();
 builder.Services.AddSingleton<DashboardService>();
 builder.Services.AddSingleton<AppLauncher>();
+builder.Services.AddSingleton<UpdateService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<UpdateService>());
 builder.Services.AddSingleton<TelemetryHub>();
 builder.Services.AddSingleton<TelemetryLoop>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<TelemetryLoop>());
@@ -199,6 +207,11 @@ api.MapPost("/apps/launch", (ActionRequest r, AppLauncher a) => Result(a.Launch(
 // Inicio con Windows
 api.MapPost("/autostart", (EnabledRequest r, AutoStartService s, TelemetryLoop l) => { l.InvalidateControls(); return ErrorResult(s.SetEnabled(r.Enabled)); });
 
+// Actualizaciones
+api.MapGet("/update", (UpdateService u) => u.State);
+api.MapPost("/update/check", async (UpdateService u, TelemetryLoop l) => { var e = await u.CheckAsync(); l.InvalidateControls(); return ErrorResult(e); });
+api.MapPost("/update/install", (UpdateService u, TelemetryLoop l) => { l.InvalidateControls(); return ErrorResult(u.StartInstall()); });
+
 // Revocar todos los dispositivos emparejados
 api.MapPost("/unpair-all", (AuthService a) => { a.RevokeAll(); return Results.Ok(); });
 
@@ -216,7 +229,8 @@ catch (Exception ex)
 var tray = new Thread(() =>
 {
     System.Windows.Forms.Application.EnableVisualStyles();
-    System.Windows.Forms.Application.Run(new InfoPanel.Tray.TrayApp(() => LocalUrls(auth.Config.Port), auth.Config.Pin, app.Services.GetRequiredService<AutoStartService>(), silent));
+    System.Windows.Forms.Application.Run(new InfoPanel.Tray.TrayApp(() => LocalUrls(auth.Config.Port), auth.Config.Pin,
+        app.Services.GetRequiredService<AutoStartService>(), app.Services.GetRequiredService<UpdateService>(), silent, args.Contains(UpdateService.AfterUpdateArg)));
 });
 tray.SetApartmentState(ApartmentState.STA);
 tray.Start();

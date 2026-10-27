@@ -904,6 +904,56 @@ function bindDisplayLayout() {
   };
 }
 
+// ================= Actualizaciones =================
+// La PC revisa sola el repositorio público de releases. Acá se ve la versión, las novedades y el botón
+// para instalar; la PC descarga, verifica, se reemplaza y se reinicia, y la conexión vuelve sola.
+let updateSig = '';
+
+function renderUpdate(u) {
+  if (!u) return;
+  const sig = JSON.stringify(u);
+  if (sig === updateSig) return;
+  updateSig = sig;
+  const busy = u.status === 'downloading' || u.status === 'installing';
+  $('#update-box').innerHTML = u.available ? `
+    <div class="upd-head"><div><b>Versión nueva: ${esc(u.latest)}</b><small>Tenés la ${esc(u.current)}</small></div>
+      ${busy ? '' : `<button class="btn sm primary" id="upd-install" ${u.canInstall ? '' : 'disabled'}>Actualizar</button>`}</div>
+    ${busy ? `<div class="upd-progress"><span>${u.status === 'downloading' ? `Descargando… ${u.progress} %` : 'Instalando y reiniciando…'}</span>
+      <div class="bar"><i style="width:${u.status === 'downloading' ? u.progress : 100}%"></i></div></div>` : ''}
+    ${u.error ? `<p class="note bad">${esc(u.error)}</p>` : ''}
+    ${!u.canInstall ? '<p class="note">Esta copia de InfoPanel no se puede actualizar sola (versión de desarrollo).</p>' : ''}
+    ${u.notes ? `<details class="upd-notes"><summary>Novedades</summary><div>${esc(u.notes)}</div></details>` : ''}`
+    : `<div class="upd-head"><div><b>Versión ${esc(u.current)}</b><small>${u.checkFailed ? 'No se pudo buscar actualizaciones (¿sin internet?)' : u.checkedAt ? 'Al día' : 'Todavía no se buscaron actualizaciones'}</small></div>
+      <button class="btn sm" id="upd-check" ${u.status === 'checking' ? 'disabled' : ''}>${u.status === 'checking' ? 'Buscando…' : 'Buscar actualizaciones'}</button></div>`;
+
+  // Aviso en el Panel (se puede ocultar hasta la próxima versión)
+  const hidden = store.get('ip_upd_hide:' + pcId) === u.latest;
+  $('#update-banner').classList.toggle('hidden', !u.available || hidden);
+  $('#update-open').textContent = `⬆ InfoPanel ${u.latest} disponible en esta PC →`;
+}
+
+$('#control').addEventListener('click', async e => {
+  if (e.target.closest('#upd-check')) {
+    e.target.closest('#upd-check').disabled = true;
+    // El resultado llega con el próximo dato de la PC (en un segundo); si falla, se avisa
+    if (!await act('/update/check', {})) updateSig = '';
+  }
+  if (e.target.closest('#upd-install')) {
+    const u = last.controls.update;
+    if (await askConfirm(`¿Actualizar a la versión ${u.latest}?`, 'La PC descarga la versión nueva, la verifica y se reinicia sola. La configuración, el PIN y los dashboards se mantienen. La conexión vuelve en unos segundos.', 'Actualizar'))
+      act('/update/install', {}, 'Descargando la actualización…');
+  }
+});
+$('#update-open').onclick = () => {
+  document.querySelector('.tabs button[data-tab="control"]').click();
+  document.querySelector('#control-cats [data-cat="app"]')?.click();
+  setTimeout(() => $('#update-box').scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
+};
+$('#update-dismiss').onclick = () => {
+  store.set('ip_upd_hide:' + pcId, last?.controls?.update?.latest);
+  $('#update-banner').classList.add('hidden');
+};
+
 // ================= Sensores =================
 let sensorSig = '';
 let sensorType = store.get('ip_stype') || 'all';
@@ -1151,6 +1201,7 @@ function buildControl(d) {
     <div class="themes" id="themes">${THEMES.map(t => `<button data-theme="${t.id}" title="${t.name}"><i style="background:${t.swatch}"></i>${t.name}</button>`).join('')}<button data-theme="custom" title="Personalizado"><i></i>Personalizado</button></div>
     ${themeEditorHtml()}
     <label class="toggle"><input type="checkbox" id="autostart"> Iniciar InfoPanel con Windows</label>
+    <div class="update-box" id="update-box"></div>
     <div class="pair-btns">
       <button class="btn" id="logout">Desvincular este dispositivo</button>
       <button class="btn danger" id="revoke">Desvincular todos</button>
@@ -1348,6 +1399,7 @@ function updateControl(d) {
   }
 
   if (Date.now() - (touched.autostart || 0) > 3000) $('#autostart').checked = c.autoStart;
+  renderUpdate(c.update);
 }
 
 // ---------- Categorías y búsqueda de Control ----------

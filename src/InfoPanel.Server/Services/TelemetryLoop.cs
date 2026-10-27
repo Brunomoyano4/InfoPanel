@@ -13,6 +13,7 @@ public sealed class TelemetryLoop : BackgroundService
     private readonly TdpControl _tdp;
     private readonly DisplayControl _display;
     private readonly CpuFallbackService _cpuFallback;
+    private readonly UpdateService _update;
     private readonly AutoStartService _autoStart;
     private readonly TelemetryHub _hub;
     private readonly JsonSerializerOptions _json;
@@ -22,11 +23,11 @@ public sealed class TelemetryLoop : BackgroundService
     private DateTime _controlsRead = DateTime.MinValue;
 
     public TelemetryLoop(HardwareService hw, SystemService sys, SystemControl sysCtl, AsusControl asus, TdpControl tdp,
-        DisplayControl display, AutoStartService autoStart, CpuFallbackService cpuFallback, TelemetryHub hub,
+        DisplayControl display, AutoStartService autoStart, CpuFallbackService cpuFallback, UpdateService update, TelemetryHub hub,
         JsonSerializerOptions json, ILogger<TelemetryLoop> log)
     {
         (_hw, _sys, _sysCtl, _asus, _tdp, _hub, _json, _log) = (hw, sys, sysCtl, asus, tdp, hub, json, log);
-        (_display, _autoStart, _cpuFallback) = (display, autoStart, cpuFallback);
+        (_display, _autoStart, _cpuFallback, _update) = (display, autoStart, cpuFallback, update);
     }
 
     /// <summary>Fuerza a releer el estado de los controles en el próximo ciclo (después de un cambio).</summary>
@@ -54,6 +55,7 @@ public sealed class TelemetryLoop : BackgroundService
                         displayLayout = _display.GetLayout(),
                         autoStart = _autoStart.IsEnabled,
                         batteryLimit = _asus.BatteryLimit,
+                        update = _update.State,
                     };
                     _controlsRead = DateTime.UtcNow;
                 }

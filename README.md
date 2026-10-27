@@ -5,7 +5,7 @@ Un servicio en .NET corre en la PC, lee los sensores y sirve una web instalable 
 
 ## Descargar y usar
 
-1. Descargar `InfoPanel.exe` desde la sección **Releases** del repositorio. Es un solo archivo: no hace falta instalar .NET ni nada más.
+1. Descargar `InfoPanel.exe` desde los releases públicos: https://github.com/Brunomoyano4/InfoPanel-releases/releases/latest (el código de este repositorio es privado; ahí solo se publica el ejecutable). Es un solo archivo: no hace falta instalar .NET ni nada más.
 2. Ponerlo en una carpeta propia (por ejemplo `C:\InfoPanel`), porque al lado se van a crear su configuración y sus certificados.
 3. Abrirlo y aceptar el permiso de administrador. Como el ejecutable no está firmado, Windows puede mostrar "Windows protegió su PC": hay que tocar **Más información → Ejecutar de todas formas**.
 4. Aceptar el aviso del firewall en **redes privadas**.
@@ -13,6 +13,18 @@ Un servicio en .NET corre en la PC, lee los sensores y sirve una web instalable 
 6. Opcional: activar **Iniciar con Windows** desde el mismo menú.
 
 Cada PC genera su propio PIN, sus certificados y sus dashboards la primera vez que se abre (nada se comparte entre PCs).
+
+## Actualizaciones
+
+Desde la 1.2.0, InfoPanel se actualiza solo:
+
+- Revisa el repositorio público [`Brunomoyano4/InfoPanel-releases`](https://github.com/Brunomoyano4/InfoPanel-releases) 30 segundos después de arrancar y cada 6 horas (o con **Buscar actualizaciones** en Control → App, o tocando la versión en el menú de la bandeja).
+- Si hay una versión nueva, avisa con una notificación en la bandeja, un ítem **Actualizar a la versión X** en su menú, un aviso arriba del Panel (se puede ocultar hasta la próxima versión) y, en Control → App, las novedades con el botón **Actualizar**.
+- Al actualizar: descarga `InfoPanel.exe`, verifica que su SHA-256 coincida con la huella que publica GitHub para ese archivo (si no coincide o falta, no instala nada), renombra el ejecutable en uso a `InfoPanel.old.exe`, pone el nuevo en su lugar y lo arranca. El nuevo espera a que el anterior se cierre (argumento `--after-update`), avisa "InfoPanel actualizado" y borra el `.old`. La configuración, el PIN, los certificados y los dashboards están junto al ejecutable y no se tocan; los dispositivos vinculados se reconectan solos.
+- Solo el `InfoPanel.exe` publicado se reemplaza a sí mismo; en desarrollo (`dotnet build`, con `InfoPanel.dll` al lado) se ve si hay versión nueva pero no se instala.
+- Para probar sin GitHub, la variable de entorno `INFOPANEL_UPDATE_URL` apunta a otro JSON con el formato de la API de releases (`tag_name`, `body`, `assets[].name/size/digest/browser_download_url`).
+
+Para publicar una versión: subir `<Version>` en el `.csproj`, `dotnet publish -c Release` y crear el release con la etiqueta `vX.Y.Z` y el `InfoPanel.exe` en `InfoPanel-releases` (es el que leen las copias instaladas) y también en este repositorio.
 
 ## Publicar una versión (desarrollo)
 
@@ -278,7 +290,8 @@ src/InfoPanel.Server/
 │   ├── AuthService.cs         PIN, tokens y config.json
 │   ├── TelemetryHub.cs        Clientes WebSocket
 │   ├── TelemetryLoop.cs       Ciclo de 1 s que lee todo y lo envía
-│   └── AutoStartService.cs    Tarea programada de inicio con Windows
+│   ├── AutoStartService.cs    Tarea programada de inicio con Windows
+│   └── UpdateService.cs       Actualizaciones desde InfoPanel-releases
 ├── Controls/
 │   ├── AsusAcpi.cs            Driver ACPI de ASUS (bajo nivel)
 │   ├── AsusControl.cs         Modos y curvas de ventilador ASUS
@@ -335,6 +348,9 @@ El WebSocket `/ws` espera el token como primer mensaje y luego envía un JSON po
 | GET | `/api/apps/icon?id=` | — (PNG) |
 | POST | `/api/apps/launch` | `{ action: <id de la app> }` |
 | POST | `/api/unpair-all` | — |
+| GET | `/api/update` | Estado: versión actual y nueva, novedades, progreso, error |
+| POST | `/api/update/check` | Buscar ahora |
+| POST | `/api/update/install` | Descargar, verificar, reemplazar y reiniciar |
 
 ## Notas y limitaciones
 

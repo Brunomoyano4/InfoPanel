@@ -16,14 +16,17 @@ public sealed class TrayApp : ApplicationContext
     private readonly string _pin;
     private readonly ContextMenuStrip _menu;
     private readonly List<ToolStripItem> _urlItems = new();
+    private readonly UpdateService _update;
+    private readonly ToolStripMenuItem _updateItem;
 
     /// <summary>
     /// getUrls se consulta cada vez que hace falta (menú, QR): la IP puede cambiar o el Wi-Fi
     /// puede no estar conectado todavía cuando InfoPanel arranca con Windows.
     /// </summary>
-    public TrayApp(Func<List<string>> getUrls, string pin, AutoStartService autoStart, bool silent)
+    public TrayApp(Func<List<string>> getUrls, string pin, AutoStartService autoStart, UpdateService update, bool silent, bool justUpdated)
     {
         _autoStart = autoStart;
+        _update = update;
         _getUrls = getUrls;
         _pin = pin;
 
@@ -36,12 +39,25 @@ public sealed class TrayApp : ApplicationContext
         _menu.Items.Add(new ToolStripSeparator());
         _autoStartItem = new ToolStripMenuItem("Iniciar con Windows", null, (_, _) => ToggleAutoStart()) { Checked = autoStart.IsEnabled };
         _menu.Items.Add(_autoStartItem);
+        // Solo aparece cuando hay una versión nueva
+        _updateItem = new ToolStripMenuItem("", null, (_, _) => InstallUpdate()) { Visible = false };
+        _menu.Items.Add(_updateItem);
         _menu.Items.Add(new ToolStripSeparator());
+        _menu.Items.Add($"Versión {UpdateService.CurrentText}", null, (_, _) => _ = _update.CheckAsync()).ToolTipText = "Buscar actualizaciones";
         _menu.Items.Add("Salir", null, (_, _) => ExitThread());
         _menu.Opening += (_, _) =>
         {
             _autoStartItem.Checked = _autoStart.IsEnabled;
             RefreshUrlItems();
+            var st = _update.State;
+            _updateItem.Visible = st.Available;
+            _updateItem.Enabled = st.Status is not ("downloading" or "installing");
+            _updateItem.Text = st.Status switch
+            {
+                "downloading" => $"Descargando {st.Latest}… {st.Progress} %",
+                "installing" => $"Instalando {st.Latest}…",
+                _ => $"Actualizar a la versión {st.Latest}",
+            };
         };
         RefreshUrlItems();
 
@@ -54,8 +70,27 @@ public sealed class TrayApp : ApplicationContext
         };
         _icon.DoubleClick += (_, _) => Open(LocalUrl);
 
-        if (!silent)
+        // Los eventos del actualizador llegan desde otro hilo: se pasan al de la interfaz
+        var ui = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
+        _update.UpdateFound += v => ui.Post(_ => _icon.ShowBalloonTip(6000, "Actualización disponible",
+            $"InfoPanel {v} está disponible. Instalala desde el menú del ícono o desde la app.", ToolTipIcon.Info), null);
+        _update.RestartRequested += () => ui.Post(_ => ExitThread(), null);
+
+        if (justUpdated)
+            _icon.ShowBalloonTip(5000, "InfoPanel actualizado", $"Versión {UpdateService.CurrentText}", ToolTipIcon.Info);
+        else if (!silent)
             _icon.ShowBalloonTip(5000, "InfoPanel en ejecución", $"{Url}\nPIN: {pin}", ToolTipIcon.Info);
+    }
+
+    private void InstallUpdate()
+    {
+        var st = _update.State;
+        if (MessageBox.Show($"¿Actualizar InfoPanel a la versión {st.Latest}?\n\nSe descarga, se verifica y se reinicia solo. La configuración se mantiene.",
+                "InfoPanel", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
+        if (_update.StartInstall() is { } error)
+            _icon.ShowBalloonTip(5000, "InfoPanel", error, ToolTipIcon.Warning);
+        else
+            _icon.ShowBalloonTip(4000, "InfoPanel", $"Descargando la versión {st.Latest}…", ToolTipIcon.Info);
     }
 
     // Dirección en la red local (para el celu) y dirección para abrir el panel en esta misma PC
