@@ -2,6 +2,11 @@
 
 Los mismos datos se muestran en la app (Control → App → Historial de versiones) y salen de `src/InfoPanel.Server/wwwroot/changelog.json`.
 
+## 1.4.0 — 2026-10-27
+
+- Celu en horizontal: las pestañas pasan a una barra lateral angosta de íconos y el encabezado queda en una sola fila baja, para dejarle el alto al contenido.
+- Widgets chicos (2×2): el nombre ya no se corta por el dato secundario, las etiquetas de los datos no se pisan y se muestran solo los datos que entran sin aplastar la barra.
+
 ## 1.3.0 — 2026-10-27
 
 - Historial de versiones en Control → App, y las novedades se muestran solas la primera vez que se abre una versión nueva.
