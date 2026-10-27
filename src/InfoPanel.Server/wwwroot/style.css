@@ -704,3 +704,42 @@ body:has(#modal:not(.hidden)) { overflow: hidden; }
 .upd-notes div { white-space: pre-wrap; color: var(--muted); margin-top: 6px; max-height: 240px; overflow: auto; }
 .note.bad { color: var(--hot); }
 .install-banner .link { flex: 1; text-align: left; background: none; border: 0; padding: 6px 0; color: var(--accent); font: inherit; cursor: pointer; }
+
+/* ---------- Widgets de 1 fila de alto ----------
+   El nombre tiene prioridad: el dato secundario del título se achica primero y en una fila se oculta */
+.widget h3 > span { flex: 0 1 auto; }
+.widget h3 small { flex: 0 100 auto; }
+@container (max-height: 130px) { .wbody h3 small { display: none; } }
+/* Editando, la capa de mover se acomoda en una fila entre ⚙ y ✕ para que el nombre no quede tapado */
+@container (max-height: 110px) {
+  .w-move { flex-direction: row; padding: 4px 40px; gap: 6px; }
+  .w-grip { font-size: 14px; }
+  .w-name { font-size: 13px; }
+}
+@container (max-height: 110px) and (max-width: 110px) {
+  .w-move { flex-direction: column; padding: 26px 4px 4px; gap: 0; }
+}
+
+/* ---------- Historial de versiones ---------- */
+.cl-ver + .cl-ver { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
+.cl-ver h4 { margin: 0 0 6px; font-size: 16px; display: flex; align-items: baseline; gap: 10px; }
+.cl-ver h4 small { color: var(--muted); font-size: 12px; font-weight: 500; }
+.cl-ver ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: 14px; }
+.cl-ver li { margin: 4px 0; }
+
+/* ---------- Tutorial guiado ---------- */
+.tour { position: fixed; inset: 0; z-index: 40; }
+.tour-hole {
+  position: fixed; border-radius: 12px; pointer-events: none;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, .72), 0 0 0 2px var(--accent);
+  transition: left .25s ease, top .25s ease, width .25s ease, height .25s ease;
+}
+.tour-card {
+  position: fixed; width: min(340px, calc(100vw - 24px)); padding: 16px; border-radius: 16px;
+  background: var(--card); border: 1px solid var(--line); box-shadow: 0 12px 40px rgba(0, 0, 0, .5);
+  transition: top .25s ease, left .25s ease;
+}
+.tour-step { font-size: 12px; color: var(--accent); font-weight: 600; }
+.tour-card h3 { margin: 4px 0 6px; font-size: 17px; color: var(--text); }
+.tour-text { margin: 0 0 14px; color: var(--muted); font-size: 14px; line-height: 1.45; }
+.tour-foot { display: flex; align-items: center; gap: 6px; }

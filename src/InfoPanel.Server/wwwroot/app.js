@@ -378,6 +378,7 @@ function switchPc(id) {
   $('#sensors').innerHTML = '';
   $('#processes').innerHTML = '';
   resetDashboardState();
+  welcomed = false;
   start();
 }
 
@@ -954,6 +955,127 @@ $('#update-dismiss').onclick = () => {
   $('#update-banner').classList.add('hidden');
 };
 
+// ================= Novedades e historial de versiones =================
+const fmtDate = iso => iso ? new Date(iso + 'T12:00:00').toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' }) : 'en desarrollo';
+
+// Sin versión: el historial completo. Con versión: solo las novedades de esa (al abrir una versión nueva)
+async function showChangelog(version) {
+  let list;
+  try { list = await api('/changelog'); } catch { return toast('No se pudo leer el historial de versiones'); }
+  const shown = version ? list.filter(v => v.version === version) : list;
+  if (!shown.length) return;
+  openModal(version ? `Novedades de la versión ${version}` : 'Historial de versiones', shown.map(v => `
+    <section class="cl-ver">
+      <h4>${esc(v.version)}<small>${esc(fmtDate(v.date))}</small></h4>
+      <ul>${v.items.map(i => `<li>${esc(i)}</li>`).join('')}</ul>
+    </section>`).join('') + (version ? '<div class="modal-foot"><button class="btn ghost" id="cl-all">Ver todas las versiones</button><span class="spacer"></span><button class="btn primary" data-close>Listo</button></div>' : ''),
+  body => {
+    $('[data-close]', body)?.addEventListener('click', closeModal);
+    $('#cl-all', body)?.addEventListener('click', () => showChangelog());
+  });
+}
+
+// Al conectar: la primera vez en este dispositivo, el tutorial; si la PC cambió de versión, sus novedades
+function welcome() {
+  if (!info) return;
+  const key = 'ip_seen_ver:' + pcId;
+  const seen = store.get(key);
+  store.set(key, info.version);
+  if (!store.get('ip_tour_done')) return startTour();
+  if (seen && seen !== info.version) showChangelog(info.version);
+}
+
+// ================= Tutorial guiado =================
+// Resalta un elemento por paso (el resto se oscurece) con una tarjeta que explica qué hace.
+// Los pasos cuyo elemento no está (por ejemplo, sin gráficos en el dashboard) se saltean.
+const TOUR = [
+  { sel: '#machine', title: 'Tu PC', text: 'Acá ves a qué PC estás conectado. Tocá el nombre para cambiar de PC o vincular otra de la misma red.' },
+  { sel: '#status', title: 'Conexión', text: '“En vivo” significa que los datos llegan cada segundo. Si la PC se apaga o cambia de red, la app se reconecta sola.' },
+  { sel: '#dash-select', tab: 'overview', title: 'Dashboards', text: 'Elegí qué dashboard ver. Podés tener varios, por ejemplo uno para el celu y otro para la PC.' },
+  { sel: '#dash-opts', tab: 'overview', title: 'Opciones del dashboard', text: 'Cambiale el nombre, marcalo como predeterminado en celulares o en escritorio, duplicalo o eliminalo.' },
+  { sel: '#dash-edit', tab: 'overview', title: 'Editar', text: 'Agregá widgets, cambiales el tamaño arrastrando la esquina y movelos manteniendo apretado (con el mouse, arrastrando).' },
+  { sel: '#dash .widget .charts', tab: 'overview', title: 'Gráficos', text: 'Tocá o pasá el cursor por un gráfico para ver el valor de cada momento y el mínimo, promedio y máximo.' },
+  { sel: '.tabs button[data-tab="sensors"]', title: 'Sensores', text: 'Todos los sensores de la PC, con buscador y filtros por tipo.' },
+  { sel: '.tabs button[data-tab="processes"]', title: 'Procesos', text: 'Qué programas usan más CPU y memoria, con buscador. Desde acá también podés cerrarlos.' },
+  { sel: '.tabs button[data-tab="control"]', title: 'Control', text: 'Volumen, brillo, multimedia, pantallas, energía y, en equipos ASUS, ventiladores y TDP. En la sección App están el tema, las actualizaciones y este tutorial.' },
+];
+let tour = null;
+// Primer elemento visible del paso (hay gráficos ocultos en widgets chicos)
+const tourTarget = sel => [...document.querySelectorAll(sel)].find(e => e.getBoundingClientRect().width > 0);
+let welcomed = false; // ya se mostró la bienvenida para la PC actual
+
+function startTour() {
+  closeModal();
+  const steps = TOUR.filter(s => document.querySelector(s.sel));
+  if (!steps.length) return;
+  const el = document.createElement('div');
+  el.className = 'tour';
+  el.innerHTML = `<div class="tour-hole"></div>
+    <div class="tour-card" role="dialog" aria-live="polite">
+      <div class="tour-step"></div><h3 class="tour-title"></h3><p class="tour-text"></p>
+      <div class="tour-foot"><button class="btn ghost sm" data-t="skip">Saltar</button><span class="spacer"></span>
+        <button class="btn sm" data-t="prev">Anterior</button><button class="btn sm primary" data-t="next">Siguiente</button></div>
+    </div>`;
+  document.body.append(el);
+  tour = { el, steps, i: 0 };
+  el.addEventListener('click', e => {
+    const b = e.target.closest('[data-t]');
+    if (!b) return;
+    if (b.dataset.t === 'skip') return endTour();
+    if (b.dataset.t === 'prev') return showTourStep(tour.i - 1, -1);
+    tour.i === tour.steps.length - 1 ? endTour() : showTourStep(tour.i + 1, 1);
+  });
+  showTourStep(0);
+}
+
+function endTour() {
+  tour?.el.remove();
+  tour = null;
+  store.set('ip_tour_done', '1');
+}
+
+function showTourStep(i, dir = 1) {
+  const step = tour.steps[i];
+  tour.i = i;
+  if (step.tab) {
+    const tabBtn = document.querySelector(`.tabs button[data-tab="${step.tab}"]`);
+    if (!tabBtn.classList.contains('active')) tabBtn.click();
+  }
+  const target = tourTarget(step.sel);
+  // Sin nada visible para ese paso, se sigue en la misma dirección
+  if (!target) {
+    const next = i + dir;
+    return next >= 0 && next < tour.steps.length ? showTourStep(next, dir) : endTour();
+  }
+  // Los elementos fijos (pestañas, encabezado) ya están a la vista; el resto se lleva al centro
+  if (!target.closest('.tabs, .top')) target.scrollIntoView({ block: 'center' });
+  const card = $('.tour-card', tour.el);
+  $('.tour-step', card).textContent = `${i + 1} de ${tour.steps.length}`;
+  $('.tour-title', card).textContent = step.title;
+  $('.tour-text', card).textContent = step.text;
+  $('[data-t="prev"]', card).classList.toggle('hidden', i === 0);
+  $('[data-t="next"]', card).textContent = i === tour.steps.length - 1 ? 'Listo' : 'Siguiente';
+  requestAnimationFrame(placeTour);
+}
+
+// Ubica el recuadro sobre el elemento y la tarjeta debajo (o arriba si no entra)
+function placeTour() {
+  if (!tour) return;
+  const target = tourTarget(tour.steps[tour.i].sel);
+  if (!target) return;
+  const r = target.getBoundingClientRect(), pad = 6;
+  Object.assign($('.tour-hole', tour.el).style, {
+    left: r.left - pad + 'px', top: r.top - pad + 'px', width: r.width + pad * 2 + 'px', height: r.height + pad * 2 + 'px',
+  });
+  const card = $('.tour-card', tour.el);
+  const ch = card.offsetHeight, cw = card.offsetWidth;
+  const below = r.bottom + pad + 12;
+  card.style.top = (below + ch < innerHeight - 8 ? below : Math.max(8, r.top - pad - 12 - ch)) + 'px';
+  card.style.left = Math.max(12, Math.min(innerWidth - cw - 12, r.left + r.width / 2 - cw / 2)) + 'px';
+}
+addEventListener('resize', placeTour);
+addEventListener('scroll', placeTour, { passive: true });
+
 // ================= Sensores =================
 let sensorSig = '';
 let sensorType = store.get('ip_stype') || 'all';
@@ -1203,6 +1325,10 @@ function buildControl(d) {
     <label class="toggle"><input type="checkbox" id="autostart"> Iniciar InfoPanel con Windows</label>
     <div class="update-box" id="update-box"></div>
     <div class="pair-btns">
+      <button class="btn" id="show-changelog">Historial de versiones</button>
+      <button class="btn" id="show-tour">Ver el tutorial</button>
+    </div>
+    <div class="pair-btns">
       <button class="btn" id="logout">Desvincular este dispositivo</button>
       <button class="btn danger" id="revoke">Desvincular todos</button>
     </div></div>`);
@@ -1314,6 +1440,8 @@ function buildControl(d) {
     if (!await act('/autostart', { enabled: on }, on ? 'Se iniciará con Windows' : 'Ya no se inicia con Windows')) e.target.checked = !on;
   };
 
+  $('#show-changelog').onclick = () => showChangelog();
+  $('#show-tour').onclick = () => startTour();
   $('#logout').onclick = () => { if (confirm('¿Desvincular este dispositivo de esta PC?')) unpairCurrent(); };
   $('#revoke').onclick = async () => { if (confirm('¿Desvincular todos los dispositivos? Habrá que volver a ingresar el PIN.')) { await act('/unpair-all', {}); unpairCurrent(); } };
 
@@ -1564,6 +1692,8 @@ function onData(d) {
   }
   last = d;
   tick(d);
+  // Bienvenida (tutorial o novedades) recién con el primer dato: así el dashboard ya está dibujado
+  if (!welcomed) { welcomed = true; setTimeout(welcome, 600); }
   renderDashboard(d);
   renderSensors(d);
   renderProcesses(d);

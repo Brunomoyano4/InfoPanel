@@ -151,7 +151,8 @@ api.MapGet("/info", (HardwareService hw, AsusControl asus, TdpControl tdp) => ne
 {
     id = auth.Config.InstanceId,
     machine = Environment.MachineName,
-    os = System.Runtime.InteropServices.RuntimeInformation.OSDescription,
+    version = UpdateService.CurrentText,
+    os =System.Runtime.InteropServices.RuntimeInformation.OSDescription,
     cpu = hw.CpuName,
     cores = Environment.ProcessorCount,
     asus = asus.Available,
@@ -207,8 +208,13 @@ api.MapPost("/apps/launch", (ActionRequest r, AppLauncher a) => Result(a.Launch(
 // Inicio con Windows
 api.MapPost("/autostart", (EnabledRequest r, AutoStartService s, TelemetryLoop l) => { l.InvalidateControls(); return ErrorResult(s.SetEnabled(r.Enabled)); });
 
+// Historial de versiones de esta PC (el mismo archivo de la web, por la API para que funcione con varias PCs)
+api.MapGet("/changelog", () => web.GetFileInfo("changelog.json") is { Exists: true } f
+    ? Results.Stream(f.CreateReadStream(), "application/json")
+    : Results.NotFound());
+
 // Actualizaciones
-api.MapGet("/update", (UpdateService u) => u.State);
+api.MapGet("/update",(UpdateService u) => u.State);
 api.MapPost("/update/check", async (UpdateService u, TelemetryLoop l) => { var e = await u.CheckAsync(); l.InvalidateControls(); return ErrorResult(e); });
 api.MapPost("/update/install", (UpdateService u, TelemetryLoop l) => { l.InvalidateControls(); return ErrorResult(u.StartInstall()); });
 

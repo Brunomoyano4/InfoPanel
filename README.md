@@ -14,6 +14,12 @@ Un servicio en .NET corre en la PC, lee los sensores y sirve una web instalable 
 
 Cada PC genera su propio PIN, sus certificados y sus dashboards la primera vez que se abre (nada se comparte entre PCs).
 
+## Tutorial e historial de versiones
+
+- **Tutorial guiado**: la primera vez que un dispositivo abre la app (cuando llegan los primeros datos), un recorrido resalta cada parte (PC y conexión, dashboards, opciones, editar, gráficos, Sensores, Procesos y Control) con una tarjeta que la explica; se puede saltar o ir para atrás. Los pasos sin nada visible se saltean. Se vuelve a ver desde Control → App → **Ver el tutorial**.
+- **Historial de versiones**: Control → App → **Historial de versiones** muestra las novedades de cada versión. Cuando una PC cambia de versión (por ejemplo, después de actualizarse), la app muestra una sola vez las novedades de la versión nueva.
+- La fuente es `src/InfoPanel.Server/wwwroot/changelog.json` (va embebido en el exe y la app lo pide por `GET /api/changelog`, así cada PC muestra el suyo). `CHANGELOG.md` en la raíz tiene lo mismo para GitHub. Al preparar una versión: agregar su entrada arriba en el JSON con `date: null` mientras está en desarrollo, ponerle la fecha al publicarla y regenerar `CHANGELOG.md`.
+
 ## Actualizaciones
 
 Desde la 1.2.0, InfoPanel se actualiza solo:
@@ -303,6 +309,7 @@ src/InfoPanel.Server/
     ├── app.js                 PCs y conexión, métricas, sensores, procesos, control, temas
     ├── dashboard.js           Dashboards: grilla, widgets, edición, configuración
     ├── setup.html             Página de instalación (certificado + app)
+    ├── changelog.json         Historial de versiones (también en CHANGELOG.md)
     ├── sw.js                  Service worker de la app instalada
     └── icon-*.png             Íconos de la app (192, 512 y maskable)
 ```
@@ -348,6 +355,7 @@ El WebSocket `/ws` espera el token como primer mensaje y luego envía un JSON po
 | GET | `/api/apps/icon?id=` | — (PNG) |
 | POST | `/api/apps/launch` | `{ action: <id de la app> }` |
 | POST | `/api/unpair-all` | — |
+| GET | `/api/changelog` | Historial de versiones (`changelog.json`) |
 | GET | `/api/update` | Estado: versión actual y nueva, novedades, progreso, error |
 | POST | `/api/update/check` | Buscar ahora |
 | POST | `/api/update/install` | Descargar, verificar, reemplazar y reiniciar |

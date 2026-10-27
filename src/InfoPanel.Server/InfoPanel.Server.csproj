@@ -14,7 +14,7 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <!-- La web también va embebida en el ejecutable (para publicar un solo .exe) -->
     <GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>
-    <Version>1.2.0</Version>
+    <Version>1.3.0</Version>
     <Product>InfoPanel</Product>
     <Description>Telemetría y control de PCs con Windows desde el celular</Description>
   </PropertyGroup>
