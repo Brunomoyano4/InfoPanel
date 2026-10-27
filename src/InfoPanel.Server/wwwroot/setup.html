@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0e1116">
+  <title>Instalar InfoPanel</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body { padding: 0; }
+    .setup { max-width: 560px; margin: 0 auto; padding: 24px 16px 40px; }
+    .setup header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+    .setup h1 { font-size: 22px; margin: 0; }
+    .setup h2 { font-size: 16px; margin: 0 0 8px; display: flex; gap: 10px; align-items: center; }
+    .setup h2 .n { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--on-accent); font-size: 14px; flex: none; }
+    .setup .card { margin-bottom: 12px; }
+    .setup ol { margin: 8px 0; padding-left: 20px; color: var(--muted); }
+    .setup ol li { margin: 4px 0; }
+    .setup ol b { color: var(--text); font-weight: 600; }
+    .setup details { margin-top: 8px; color: var(--muted); }
+    .setup summary { color: var(--text); }
+    .setup .ok { color: var(--accent); font-weight: 600; }
+    .setup .bad { color: var(--hot); }
+    .setup .btn { display: inline-block; text-decoration: none; margin-top: 6px; }
+  </style>
+</head>
+<body>
+  <main class="setup">
+    <header>
+      <img src="icon.svg" alt="" width="44" height="44">
+      <div>
+        <h1>Instalar InfoPanel</h1>
+        <div class="sub" id="pc">—</div>
+      </div>
+    </header>
+
+    <section class="card hidden" id="webview">
+      <h2>Estás en el visor de la cámara</h2>
+      <p class="note">Desde acá no se puede instalar el certificado ni la app. Abrí esta página en Chrome:</p>
+      <a class="btn primary" id="open-chrome" href="#">Abrir en Chrome</a>
+    </section>
+
+    <p class="note">Para que InfoPanel funcione como app (pantalla completa, con ícono y sin barra del navegador), el celu tiene que confiar en la conexión segura de esta PC. Se hace una sola vez por PC.</p>
+
+    <section class="card">
+      <h2><span class="n">1</span> Instalá el certificado de esta PC</h2>
+      <a class="btn primary" href="/ca.crt" download>Descargar certificado</a>
+      <details open>
+        <summary>Android</summary>
+        <ol>
+          <li>Abrí <b>Ajustes</b> y buscá <b>"certificado de CA"</b> (también puede estar en Seguridad → Más ajustes de seguridad → Encriptación y credenciales → Instalar un certificado).</li>
+          <li>Elegí <b>Certificado de CA</b>, tocá <b>Instalar de todas formas</b> y seleccioná el archivo <b>InfoPanel-….crt</b> de Descargas.</li>
+        </ol>
+      </details>
+      <details>
+        <summary>iPhone / iPad</summary>
+        <ol>
+          <li>Abrí esta página en <b>Safari</b> y tocá "Descargar certificado"; aceptá descargar el perfil.</li>
+          <li>Ajustes → <b>Perfil descargado</b> → Instalar.</li>
+          <li>Ajustes → General → Información → <b>Ajustes de confianza de certificados</b> → activá "InfoPanel CA".</li>
+        </ol>
+      </details>
+      <p class="note">El certificado solo sirve para las conexiones con InfoPanel de esta PC: lo genera la propia PC y no sale de tu red.</p>
+    </section>
+
+    <section class="card">
+      <h2><span class="n">2</span> Probá la conexión segura</h2>
+      <button class="btn" id="test">Probar</button>
+      <p id="result" class="note"></p>
+    </section>
+
+    <section class="card">
+      <h2><span class="n">3</span> Abrí la app e instalala</h2>
+      <a class="btn primary" id="open" href="#">Abrir InfoPanel seguro</a>
+      <ol>
+        <li>Vinculá con el PIN (está en el menú del ícono de InfoPanel, junto al reloj de la PC).</li>
+        <li>En el menú del navegador (⋮) elegí <b>Instalar app</b> o <b>Agregar a la pantalla principal</b>.</li>
+      </ol>
+      <p class="note">Desde la app podés agregar otras PCs de la red. Para cada una nueva, instalá también su certificado desde su propia página de instalación.</p>
+    </section>
+
+    <p class="note"><a href="/">Seguir sin instalar →</a></p>
+  </main>
+
+  <script>
+    'use strict';
+    let httpsUrl = null;
+
+    // Visor interno de Android (WebView, "; wv)" en el user agent): se ofrece abrir la página en Chrome
+    if (/Android/.test(navigator.userAgent) && /; wv\)/.test(navigator.userAgent)) {
+      document.getElementById('webview').classList.remove('hidden');
+      document.getElementById('open-chrome').href =
+        `intent://${location.host}${location.pathname}#Intent;scheme=http;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(location.href)};end`;
+    }
+
+    // Elige la dirección HTTPS que coincide con cómo se abrió esta página (misma IP)
+    fetch('/api/hello').then(r => r.json()).then(h => {
+      document.getElementById('pc').textContent = h.name;
+      httpsUrl = h.https.find(u => u.includes('//' + location.hostname + ':')) || h.https[0] || `https://${location.hostname}:${h.httpsPort}`;
+      document.getElementById('open').href = httpsUrl + '/';
+    }).catch(() => { document.getElementById('pc').textContent = 'No se pudo leer la PC'; });
+
+    document.getElementById('test').onclick = async () => {
+      const out = document.getElementById('result');
+      out.className = 'note';
+      out.textContent = 'Probando…';
+      try {
+        const r = await fetch(httpsUrl + '/api/hello', { cache: 'no-store' });
+        if (!r.ok) throw new Error();
+        out.className = 'ok';
+        out.textContent = '✓ Conexión segura lista. Seguí con el paso 3.';
+      } catch {
+        out.className = 'bad';
+        out.textContent = 'Todavía no confía en el certificado. Revisá el paso 1 (y que esté instalado como "Certificado de CA").';
+      }
+    };
+  </script>
+</body>
+</html>

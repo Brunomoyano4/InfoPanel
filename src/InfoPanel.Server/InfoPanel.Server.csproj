@@ -1,0 +1,57 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <!-- Sin consola: corre con un ícono en la bandeja -->
+    <OutputType>WinExe</OutputType>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <RootNamespace>InfoPanel</RootNamespace>
+    <AssemblyName>InfoPanel</AssemblyName>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- La web también va embebida en el ejecutable (para publicar un solo .exe) -->
+    <GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>
+    <Version>1.0.0</Version>
+    <Product>InfoPanel</Product>
+    <Description>Telemetría y control de PCs con Windows desde el celular</Description>
+  </PropertyGroup>
+
+  <!-- Publicación: un solo InfoPanel.exe autocontenido (no requiere instalar .NET) -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DebugType>none</DebugType>
+    <!-- Sin archivos de IIS ni manifiesto de recursos estáticos: la web va embebida -->
+    <IsTransformWebConfigDisabled>true</IsTransformWebConfigDisabled>
+    <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.6" />
+    <PackageReference Include="NAudio.Wasapi" Version="2.2.1" />
+    <PackageReference Include="System.Management" Version="10.0.14" />
+    <PackageReference Include="QRCoder" Version="1.8.0" />
+    <PackageReference Include="Microsoft.Extensions.FileProviders.Embedded" Version="10.0.14" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Evita choques de nombres entre WinForms y ASP.NET; se importan solo donde se usan -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- En desarrollo la web se sirve desde la carpeta del ejecutable (se puede actualizar sin recompilar);
+         publicada, va solo embebida -->
+    <Content Update="wwwroot\**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
+    <EmbeddedResource Include="wwwroot\**" />
+    <None Update="tools\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

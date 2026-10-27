@@ -1,0 +1,22 @@
+# Compilación
+bin/
+obj/
+publish/
+*.user
+.vs/
+
+# Datos de cada PC (se generan solos al abrir InfoPanel; tienen PIN, tokens y la clave de la CA)
+config.json
+certs/
+dashboards.json
+display-presets.json
+
+# Material local de diseño (brief y capturas con datos de la PC)
+docs/
+
+# Herramientas de desarrollo
+.playwright-mcp/
+.claude/
+.agent/
+CLAUDE.md
+readme-claude*.md

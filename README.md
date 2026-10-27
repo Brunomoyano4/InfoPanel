@@ -1,0 +1,356 @@
+# InfoPanel
+
+Panel de telemetría y control de la PC accesible desde el celular (u otro dispositivo) por la red local.
+Un servicio en .NET corre en la PC, lee los sensores y sirve una web instalable (PWA) que se actualiza en vivo por WebSocket.
+
+## Descargar y usar
+
+1. Descargar `InfoPanel.exe` desde la sección **Releases** del repositorio. Es un solo archivo: no hace falta instalar .NET ni nada más.
+2. Ponerlo en una carpeta propia (por ejemplo `C:\InfoPanel`), porque al lado se van a crear su configuración y sus certificados.
+3. Abrirlo y aceptar el permiso de administrador. Como el ejecutable no está firmado, Windows puede mostrar "Windows protegió su PC": hay que tocar **Más información → Ejecutar de todas formas**.
+4. Aceptar el aviso del firewall en **redes privadas**.
+5. Aparece el ícono de InfoPanel junto al reloj. Desde su menú, **Conectar un celular (QR)…** muestra un QR para abrirlo en el celu, y ahí se ve también el PIN.
+6. Opcional: activar **Iniciar con Windows** desde el mismo menú.
+
+Cada PC genera su propio PIN, sus certificados y sus dashboards la primera vez que se abre (nada se comparte entre PCs).
+
+## Publicar una versión (desarrollo)
+
+```bash
+cd src/InfoPanel.Server
+dotnet publish -c Release -o ../../publish
+```
+
+Genera `publish/InfoPanel.exe`: un solo archivo autocontenido (win-x64, ~63 MB, comprimido), con la web embebida. En desarrollo, `dotnet build` copia `wwwroot/` junto al ejecutable y se sirve desde ahí, así se puede cambiar la web sin recompilar. Si esa carpeta no existe, se usa la copia embebida. La versión se cambia en `<Version>` del `.csproj`.
+
+## Panel (dashboards personalizables)
+
+La primera pestaña, **Panel**, es un dashboard armable. Arriba se elige cuál mostrar (cada dispositivo recuerda el suyo). **Editar** reemplaza el selector por una barra de una sola fila (**＋ Widget**, **⚙** ajustes, **Cancelar**, **Guardar**). Cada widget muestra su nombre y su tamaño, con ⚙ arriba a la izquierda, ✕ arriba a la derecha y la esquina para redimensionar abajo.
+
+- **＋ Widget** agrega uno de cuatro tipos:
+  - **Métrica**: CPU, GPU, memoria, batería, ventiladores, límites de potencia, red, discos o sistema.
+  - **Sensor**: cualquier sensor (con buscador) como número, medidor o gráfico con mín/máx.
+  - **Aplicaciones**: accesos con el ícono de cada app instalada, de escritorio o de la Store. Tocar uno la abre en la PC.
+  - **Control**: volumen, brillo, multimedia, micrófono, modo de energía, modo ASUS, presets de TDP (configurables), límite de carga, Hz de pantalla, bloquear/suspender.
+- **Mover**: arrastrar el widget desde el centro (⠿).
+- **Redimensionar**: arrastrar la esquina inferior derecha, o elegir ancho/alto en ⚙.
+- **⚙** del widget lo configura y **✕** lo quita.
+- **⚙ de la barra** (ajustes del dashboard): nombre, columnas, tamaño de celda y alto de fila con botones segmentados, más Duplicar y Eliminar.
+  - **Columnas Auto** (predeterminado): la celda tiene un tamaño fijo (chica 64, mediana 76, grande 96 o muy grande 120 px) y entran tantas columnas como quepan. Un 1×1 es siempre un cuadradito, del mismo tamaño en el celu y en la PC: con celda mediana, el celu tiene 4 columnas, la tablet 8 y una pantalla de 1600 px 17. Si un widget es más ancho que las columnas disponibles, se recorta a todo el ancho. El tamaño de celda solo se muestra con columnas Auto.
+  - **Columnas fijas** (4, 6, 8 o 12): la grilla siempre tiene esa cantidad y las celdas se estiran con la pantalla.
+  - **Alto de fila Cuadrado** (predeterminado): iguala el alto de cada fila al ancho de una columna, así un 1×1 es cuadrado en cualquier pantalla. Tiene un mínimo de 84 px, lo justo para el título, el valor y la barra de un 1×1, y un máximo de 160 px. También se puede fijar en 75, 90, 110 o 130 px.
+- En el celu, las ventanas de configuración salen desde abajo, de borde a borde, con las acciones en una barra al pie.
+- **Guardar** lo guarda en la PC; **Cancelar** descarta los cambios.
+- En el selector, **+ Nuevo dashboard…** crea uno vacío.
+
+Los widgets adaptan su contenido al tamaño: en una fila, las métricas muestran solo el valor principal y los controles ocultan el título, sin scroll. En widgets más grandes, si sobra contenido se puede scrollear, pero la barra solo aparece al pasar el mouse. Con columnas fijas, el mismo dashboard se ve muy distinto en el celu y en la PC; con columnas automáticas, un solo dashboard sirve para los dos. El primer dashboard ("Principal") se crea automáticamente con las tarjetas del antiguo Resumen, y las columnas se eligen según la pantalla del dispositivo que lo crea.
+
+Las pestañas Panel y Control ocupan todo el ancho de la ventana (en escritorio, más columnas). En Control, "Límite de carga" y "Equipo" son tarjetas compactas apiladas en un solo lugar de la grilla. Sensores y Procesos son listas y se limitan a 1100 px para que se lean bien.
+
+Los dashboards se guardan en `dashboards.json` junto al ejecutable (máximo 30 dashboards y 100 widgets por dashboard).
+
+### Aplicaciones
+
+- La lista sale de la carpeta de aplicaciones de Windows (`shell:AppsFolder`) y omite desinstaladores y enlaces web.
+- Solo se pueden abrir apps de esa lista: el servidor rechaza cualquier otro id o ruta.
+- Se abren a través del Explorador, así corren **sin permisos de administrador** aunque InfoPanel sí los tenga.
+- Los íconos se generan en la PC con transparencia y se guardan en memoria.
+
+## Qué muestra
+
+- **CPU**: carga total y barras por núcleo, temperatura, consumo (W), clock, voltajes.
+- **GPU** (AMD / NVIDIA / Intel): carga, temperatura, consumo, clock, VRAM.
+- **Memoria** física y virtual.
+- **Batería**: nivel, carga/descarga en W, tiempo restante, desgaste.
+- **Ventiladores**: RPM (placa vía LibreHardwareMonitor y ASUS vía ACPI).
+- **Red**: subida/bajada por adaptador.
+- **Discos**: espacio, temperatura, lectura/escritura.
+- **Sistema**: versión de Windows, placa, BIOS, GPU y driver, módulos de RAM, dirección del panel y tiempo encendido.
+- **Procesos**: los 50 primeros según la columna elegida (tocar la cabecera ordena por nombre, CPU o RAM; tocarla de nuevo invierte el orden), con opción de cerrarlos.
+- Pestaña **Sensores** con todos los sensores crudos (mín/máx) y filtro.
+
+### CPU sin PawnIO
+
+Sin el driver PawnIO, LibreHardwareMonitor da 0 en temperatura, consumo y clock del CPU. En ese caso se usan fuentes alternativas, que aparecen como sensores extra del CPU:
+
+| Dato | Fuente | Sensor |
+|---|---|---|
+| Temperatura | ACPI de ASUS (`0x00120094`) | `CPU (ACPI ASUS)` |
+| Consumo del paquete | Contador de Windows `Energy Meter(RAPL_Package0_PKG)\Power` | `Package (RAPL)` |
+| Clock efectivo | `% Processor Performance` × frecuencia base | `Efectivo (Windows)` |
+
+El panel toma el primer valor mayor a 0 según el orden: LHM → alternativo. Si se instala PawnIO, se usan los sensores de LHM.
+
+## Qué controla
+
+| Control | Cómo | Equipos |
+|---|---|---|
+| Volumen / silencio | Core Audio (NAudio) | Todos |
+| Silenciar micrófono (todos los micrófonos activos) | Core Audio | Todos |
+| Dispositivo de salida de audio predeterminado | `IPolicyConfig` (COM no documentada de Windows) | Todos |
+| Resolución y frecuencia (Hz) de cada pantalla | `ChangeDisplaySettingsEx` | Todos |
+| Límite de carga de batería (60 / 80 / 100 %) | ACPI ASUS (`0x00120057`) | ROG Ally, laptops ROG/TUF |
+| Brillo | WMI `WmiMonitorBrightness` | Pantallas internas (laptops, Ally) |
+| Multimedia (play/pausa, siguiente, anterior) | Teclas multimedia | Todos |
+| Modo de energía de Windows 11 (eficiencia/equilibrado/rendimiento) y plan de energía | `powrprof` / `powercfg` | Todos |
+| Bloquear, suspender, hibernar, reiniciar, apagar | Win32 / `shutdown` | Todos |
+| Cerrar procesos | `Process.Kill` | Todos |
+| Modo ASUS (Silent / Balanced / Turbo) | ACPI `\\.\ATKACPI` | ROG Ally, laptops ROG/TUF |
+| Curvas de ventilador (8 puntos, CPU/GPU/Mid) | ACPI ASUS | ROG Ally, laptops ROG/TUF |
+| TDP (SPL / sPPT / fPPT) | ACPI ASUS, o `ryzenadj.exe` | ASUS, o CPUs AMD Ryzen |
+| Ventiladores de placa (% fijo o automático) | LibreHardwareMonitor | Placas con Super I/O compatible |
+| Presets de pantallas (orden/posición, resolución, Hz, principal, cuáles activas) | API CCD `SetDisplayConfig` | Todos |
+| Modo de proyección (solo interna / duplicar / extender / solo externa, como Win+P) | API CCD | Todos |
+| Iniciar con Windows | Tarea programada elevada | Todos |
+
+## Requisitos
+
+- Windows 10/11 y .NET 10 SDK.
+- **Ejecutar como administrador** (el ejecutable lo pide solo, por el manifiesto): lo necesitan el TDP, los ventiladores y el inicio con Windows.
+- Opcional: el driver **PawnIO** ([pawnio.eu](https://pawnio.eu)) para que LibreHardwareMonitor lea todos los sensores de CPU y placa (clock y temperatura por núcleo, voltajes). Sin él, la temperatura, el consumo y el clock del CPU salen de fuentes alternativas (ver "CPU sin PawnIO").
+- Opcional: `ryzenadj.exe` (y sus DLL) en `src/InfoPanel.Server/tools/` para controlar el TDP en equipos AMD que no son ASUS.
+
+## Uso
+
+```bash
+cd src/InfoPanel.Server
+dotnet build
+```
+
+Ejecutar `bin/Debug/net10.0-windows/InfoPanel.exe` (pedirá permisos de administrador). No abre ventana: aparece un **ícono en la bandeja** (junto al reloj) y un aviso con la dirección y el PIN. El menú del ícono tiene:
+
+- La dirección (`http://192.168.x.x:5055`) y el PIN. Solo se listan IPs alcanzables desde la red: se descartan las `169.254.x.x` y los adaptadores virtuales (Wi-Fi Direct, Bluetooth, Hyper-V, VirtualBox, VMware, WSL), y primero va el adaptador conectado al router.
+- **Conectar un celular (QR)…**: muestra un QR con la dirección `http://` de la página de instalación. La dirección se calcula al abrir la ventana, así toma la IP actual aunque InfoPanel haya arrancado antes de que se conectara el Wi-Fi. Si la página se abre dentro del visor interno de la cámara, muestra un botón **Abrir en Chrome**. Probé un QR con enlace `intent://` para forzar Chrome, pero no sirve: el lector de la cámara de Xiaomi lo muestra como texto.
+- **Abrir panel** (también con doble clic) y **Copiar dirección**.
+- **Iniciar con Windows** (tilde).
+- **Salir**: detiene el servidor y devuelve los ventiladores de placa a automático.
+
+Solo puede haber una instancia: si ya está abierto, avisa y se cierra.
+
+1. Desde el celular, en la misma red Wi-Fi, abrir esa dirección (o escanear el QR del ícono).
+2. Ingresar el PIN. El dispositivo queda vinculado (guarda un token) y no vuelve a pedirlo.
+3. Para usarlo como app, seguir "Instalar como app" (abajo).
+
+Puertos: **5055** HTTP, **5056** HTTPS y **5057** UDP (descubrimiento), todos configurables en `config.json`. La primera vez, Windows pregunta si permitir el acceso en el firewall: hay que aceptar en **redes privadas**. Esa regla de programa cubre los tres puertos. Si no aparece el aviso, se pueden crear las reglas a mano (como administrador):
+
+```bash
+netsh advfirewall firewall add rule name="InfoPanel" dir=in action=allow protocol=TCP localport=5055,5056 profile=private
+```
+
+```bash
+netsh advfirewall firewall add rule name="InfoPanel descubrimiento" dir=in action=allow protocol=UDP localport=5057 profile=private
+```
+
+## Instalar como app (HTTPS)
+
+Chrome (y Safari) solo instalan una web como app (pantalla completa, ícono propio, sin barra del navegador) si va por HTTPS. Sin servicios externos, InfoPanel resuelve el HTTPS así:
+
+- Cada PC genera su propia **autoridad de certificación (CA)**, válida 10 años, y un **certificado de servidor** firmado por ella con sus IPs y nombres, válido 800 días. Se guardan en `certs/` junto al ejecutable.
+- Si cambia la IP de la PC, al arrancar se emite un certificado de servidor nuevo con la misma CA, así que en el celu no hay que hacer nada.
+- En el celu se instala la CA **una vez por PC**:
+  1. Abrir la página de instalación: **Conectar un celular (QR)** en el ícono de la bandeja, o el aviso "Instalar como app" de la pestaña Panel (solo aparece por HTTP y se puede cerrar con ✕). Es `http://IP:5055/setup.html`.
+  2. Descargar el certificado e instalarlo como **Certificado de CA**. La página explica los pasos para Android y para iPhone.
+  3. **Probar** la conexión segura y **Abrir InfoPanel seguro** (`https://IP:5056`).
+  4. Vincular con el PIN y elegir **Instalar app** en el menú del navegador.
+- La app instalada guarda su interfaz (service worker `sw.js`), así que abre aunque la PC no responda. Los datos en vivo nunca se guardan.
+
+Notas:
+
+- `certs/ca.pfx` contiene la clave privada de la CA: quien la tenga podría hacerse pasar por esa PC ante los celulares que confían en ella. No compartirla ni subirla a ningún lado. Si se borra la carpeta `certs/`, se generan certificados nuevos y hay que reinstalar la CA en los celulares.
+- La app instalada queda atada a la dirección con la que se instaló (`https://IP:5056`). Si el router le da otra IP a la PC, hay que abrirla de nuevo con la IP nueva. Para evitarlo, conviene reservarle una IP fija a la PC en el router (reserva DHCP).
+- Por HTTP todo sigue funcionando igual, solo que como página web.
+
+## Varias PCs
+
+Una sola app maneja todas las PCs. Tocando el nombre de la PC (arriba a la izquierda) se abre el selector:
+
+- **Mis PCs**: las vinculadas. **Usar** cambia de PC; **✕** la quita de la lista.
+- **En esta red**: otras PCs con InfoPanel abierto, encontradas automáticamente. **Vincular** pide el PIN de esa PC.
+- **Agregar por dirección**: IP o `IP:puerto`, para redes donde el descubrimiento no llega (por ejemplo, otra subred o VPN).
+
+Cómo funciona:
+
+- **Descubrimiento**: cada PC anuncia por UDP broadcast (puerto 5057) su id, nombre y puertos cada 5 s, y guarda los anuncios de las demás. El navegador no puede escuchar la red, así que le pide la lista a la PC a la que está conectado (`/api/peers`). Una PC deja de aparecer a los 20 s sin anuncios.
+- **Conexión directa**: la app habla directo con cada PC (API y WebSocket). Para eso las PCs aceptan pedidos de otros orígenes (CORS). No hay cookies: cada PC exige su propio token, que se obtiene con su PIN.
+- **Por PC**: cada PC tiene sus propios dashboards; el dashboard elegido se recuerda por PC.
+- Desde la app instalada (HTTPS), cada PC nueva necesita también su certificado instalado en el celu. Si falta, el selector lo avisa con el enlace a la página de instalación de esa PC.
+- Los dispositivos ya vinculados antes de esta versión se migran solos: su sesión pasa a ser la primera PC de la lista.
+
+## Inicio con Windows
+
+Se activa desde el ícono de la bandeja o desde la app (Control → Sesión). Crea la tarea programada `InfoPanel`:
+
+- Se ejecuta al iniciar sesión (10 s de demora), con privilegios elevados y sin pedir UAC.
+- Arranca y sigue corriendo con batería, y sin límite de tiempo (las tareas de Windows, por defecto, no arrancan con batería y se cortan a las 72 h).
+- Lanza `InfoPanel.exe --autostart`, que no muestra el aviso de inicio.
+- Apunta a la ruta actual del ejecutable: si se mueve la carpeta, hay que desactivarla y volver a activarla.
+
+La carpeta "Inicio" o la clave `Run` no sirven, porque Windows no lanza desde ahí apps que requieren administrador.
+
+## Presets de pantallas
+
+En Control → Pantallas:
+
+- **Guardar actual**: guarda la configuración completa de Windows (orden y posición, resolución, frecuencia, rotación, pantalla principal y cuáles están activas) con un nombre. Primero se acomoda todo en Configuración de Windows → Pantalla y después se guarda.
+- **Aplicar**: valida la configuración con las pantallas conectadas y la aplica. Si falta algún monitor del preset, Windows la rechaza y no cambia nada.
+- **Modos rápidos**: solo interna, duplicar, extender, solo externa.
+
+Se guardan en `display-presets.json` junto al ejecutable. Como los identificadores de las placas de video cambian entre reinicios, al aplicar se reasignan buscando cada monitor por su id, que sí es estable.
+
+## Temas
+
+En Control → App: Oscuro, AMOLED (negro puro), Claro, ROG (rojo), Cyber, Océano y **Personalizado**. La elección se guarda en el navegador de cada dispositivo.
+
+El tema **Personalizado** abre un editor:
+
+- **Base**: uno de los temas anteriores (define fondo, tarjetas y texto).
+- **Acento**: botones, barras y selección. Se elige con el selector de color, escribiendo el hexadecimal (`#7c6cff` o `#7cf`) o con los colores sugeridos.
+- **Secundario**: gráficos y detalles.
+- Los cambios se ven en vivo. El texto sobre el acento se pone negro o blanco según su luminancia, para que siempre se lea. **Restablecer** vuelve a los valores iniciales. Los colores están definidos como variables CSS en `wwwroot/style.css` (`:root[data-theme="..."]`) y la lista en `THEMES` de `app.js`.
+
+## Configuración (`config.json`)
+
+Se crea junto al ejecutable en el primer arranque:
+
+| Clave | Default | Descripción |
+|---|---|---|
+| `Port` | `5055` | Puerto HTTP |
+| `HttpsPort` | `5056` | Puerto HTTPS (app instalable) |
+| `DiscoveryPort` | `5057` | Puerto UDP de descubrimiento de PCs |
+| `InstanceId` | aleatorio | Identificador estable de esta PC en el selector |
+| `Pin` | aleatorio | PIN de emparejamiento (borrarlo genera uno nuevo) |
+| `TdpMin` / `TdpMax` | `5` / `30` | Rango permitido de TDP en W. 30 W es el máximo del ROG Ally; en laptops puede subirse |
+| `BatteryLimit` | `null` | Último límite de carga elegido; se reaplica al arrancar porque el firmware puede volver a 100 % |
+| `Tokens` | `[]` | Dispositivos vinculados. "Desvincular todos" desde la app lo vacía |
+
+## Diseño de la UI
+
+Sistema visual (implementado en `wwwroot/style.css`, bloque "Sistema visual v2"):
+
+- **Colores**: superficies grafito (`--bg`, `--card`, `--card-2`, `--card-3`), bordes `--line` / `--line-soft` y un solo acento. El estado seleccionado usa `--accent-soft` (fondo) y `--accent-line` (borde) en lugar de un relleno sólido; el relleno sólido de acento queda para la acción principal.
+- **Tipografía**: fuente del sistema con cifras tabulares. Valor protagonista 34 px/700, título de tarjeta 15 px/600 en color de texto con ícono de línea, etiquetas 12 px/500.
+- **Medidas**: tarjeta con radio 16 y padding 16; controles con radio 12 y 44 px de alto (táctil); espaciado en base 4.
+- **Componentes**: botones (primario, secundario, contorno, fantasma, peligro, ícono), segmentados, chips, interruptores, búsqueda, ventana inferior con asa en el celu.
+- **Navegación**: pestañas con ícono abajo en el celu; desde 1100 px se convierten en barra lateral con el logo.
+- **Tarjetas**: los gráficos ocupan el alto que sobra, con área suave bajo la línea (CPU, GPU, Memoria, Batería, potencia), así las tarjetas altas no quedan con huecos.
+- **Sensores**: buscador y chips por tipo (Temperatura, Carga, Consumo, Clock…), con los nombres de tipo en español.
+- **Procesos**: PID bajo el nombre y una barrita de CPU por fila.
+- **Control**: volumen y brillo con ícono, micrófono como interruptor y curva de ventilador que muestra solo el valor del punto que se toca. Arriba tiene un buscador y chips de categoría, como Sensores:
+  - Categorías: **Sonido** (sonido y pantalla, multimedia), **Energía** (energía de Windows, TDP, límite de carga, equipo), **Ventiladores** (modo ASUS y curva, ventiladores de placa), **Pantallas** y **App** (tema, inicio con Windows, sesión).
+  - Solo aparecen las categorías que existen en esa PC.
+  - La búsqueda mira títulos, botones y opciones (por ejemplo, "apagar" deja solo Equipo).
+  - Cada dispositivo recuerda la última categoría elegida.
+  - Cada tarjeta se marca con `data-cat` en `buildControl` (`app.js`); para sumar una categoría, agregarla a `CONTROL_CATS`.
+
+## Estructura
+
+```
+src/InfoPanel.Server/
+├── Program.cs                 Arranque, instancia única, autenticación, endpoints /api y bandeja
+├── Native/
+│   ├── Win32.cs               P/Invoke (ACPI, teclas, energía)
+│   ├── DisplayConfig.cs       P/Invoke de pantallas (CCD y modos)
+│   ├── PolicyConfig.cs        COM para cambiar la salida de audio
+│   └── ShellImage.cs          Íconos del shell como PNG
+├── Tray/
+│   ├── TrayApp.cs             Ícono y menú de la bandeja
+│   └── ConnectForm.cs         Ventana con el QR para conectar un celular
+├── Services/
+│   ├── HardwareService.cs     Sensores LibreHardwareMonitor + ventiladores de placa
+│   ├── SystemService.cs       Procesos, discos, uptime, info del sistema
+│   ├── CpuFallbackService.cs  Temperatura/consumo/clock del CPU sin PawnIO
+│   ├── DashboardService.cs    Dashboards personalizados (dashboards.json)
+│   ├── CertificateService.cs  CA propia y certificado HTTPS (certs/)
+│   ├── DiscoveryService.cs    Anuncio y descubrimiento de PCs por UDP
+│   ├── AuthService.cs         PIN, tokens y config.json
+│   ├── TelemetryHub.cs        Clientes WebSocket
+│   ├── TelemetryLoop.cs       Ciclo de 1 s que lee todo y lo envía
+│   └── AutoStartService.cs    Tarea programada de inicio con Windows
+├── Controls/
+│   ├── AsusAcpi.cs            Driver ACPI de ASUS (bajo nivel)
+│   ├── AsusControl.cs         Modos y curvas de ventilador ASUS
+│   ├── TdpControl.cs          TDP vía ASUS o ryzenadj
+│   ├── SystemControl.cs       Volumen, brillo, multimedia, energía, procesos
+│   ├── DisplayControl.cs      Pantallas, presets y modo de proyección
+│   └── AppLauncher.cs         Lista de apps instaladas, íconos y apertura sin admin
+└── wwwroot/                   Web (HTML/CSS/JS sin build)
+    ├── app.js                 PCs y conexión, métricas, sensores, procesos, control, temas
+    ├── dashboard.js           Dashboards: grilla, widgets, edición, configuración
+    ├── setup.html             Página de instalación (certificado + app)
+    ├── sw.js                  Service worker de la app instalada
+    └── icon-*.png             Íconos de la app (192, 512 y maskable)
+```
+
+### API
+
+Todas las rutas `/api/*` (salvo `/api/pair` y `/api/hello`) requieren `Authorization: Bearer <token>`. Las rutas `/api/*` aceptan pedidos de cualquier origen (CORS), para que la app maneje varias PCs. Fuera de `/api` está `GET /ca.crt`, el certificado público de la CA de la PC.
+El WebSocket `/ws` espera el token como primer mensaje y luego envía un JSON por segundo con `hardware`, `system`, `asus` y `controls`.
+
+| Método | Ruta | Cuerpo |
+|---|---|---|
+| POST | `/api/pair` | `{ pin }` → `{ token }` |
+| GET | `/api/hello` | — → `{ app, id, name, port, httpsPort, https[] }` (público) |
+| GET | `/api/peers` | — → otras PCs con InfoPanel en la red |
+| GET | `/api/info` | — |
+| POST | `/api/audio` | `{ volume?, mute? }` |
+| POST | `/api/brightness` | `{ value }` |
+| POST | `/api/media` | `{ action: playpause\|next\|prev\|stop }` |
+| POST | `/api/power` | `{ action: lock\|sleep\|hibernate\|restart\|shutdown }` |
+| POST | `/api/powermode` | `{ action: efficiency\|balanced\|performance }` |
+| POST | `/api/powerplan` | `{ action: <guid> }` |
+| POST | `/api/process/kill` | `{ value: pid }` |
+| POST | `/api/fans/lhm` | `{ id, percent }` (`percent: null` = automático) |
+| POST | `/api/asus/mode` | `{ value: 0 Balanced \| 1 Turbo \| 2 Silent }` |
+| GET | `/api/asus/curves?mode=` | — |
+| POST | `/api/asus/curve` | `{ fan: cpu\|gpu\|mid, temps[8], speeds[8] }` |
+| POST | `/api/tdp` | `{ spl, sppt, fppt }` |
+| POST | `/api/audio/output` | `{ action: <id del dispositivo> }` |
+| POST | `/api/mic` | `{ mute }` |
+| POST | `/api/asus/battery-limit` | `{ value: 40–100 }` |
+| POST | `/api/display/mode` | `{ device, width, height, hz }` |
+| POST | `/api/display/topology` | `{ action: internal\|clone\|extend\|external }` |
+| POST | `/api/display/preset/save` | `{ action: <nombre> }` |
+| POST | `/api/display/preset/apply` | `{ action: <nombre> }` |
+| POST | `/api/display/preset/delete` | `{ action: <nombre> }` |
+| POST | `/api/autostart` | `{ enabled }` |
+| GET | `/api/dashboards` | — |
+| POST | `/api/dashboards/save` | `{ id, name, cols, rowH, widgets: [{ id, type, w, h, cfg }] }` |
+| POST | `/api/dashboards/delete` | `{ action: <id> }` |
+| GET | `/api/apps?refresh=true` | — (lista de apps instaladas) |
+| GET | `/api/apps/icon?id=` | — (PNG) |
+| POST | `/api/apps/launch` | `{ action: <id de la app> }` |
+| POST | `/api/unpair-all` | — |
+
+## Notas y limitaciones
+
+- **ASUS**: el ACPI no permite leer el modo actual ni los límites de TDP. El modo se deduce del plan de energía que activa Armoury Crate (Silent / Performance / Turbo), pero solo cuando ese plan cambia: un cambio de modo hecho desde InfoPanel no cambia el plan, así que se respeta el último modo aplicado.
+- El TDP solo se conoce después de aplicarlo desde InfoPanel, y vuelve a "desconocido" con cada cambio de modo.
+- El ACPI siempre devuelve la curva de fábrica; InfoPanel recuerda las curvas aplicadas hasta el próximo cambio de modo.
+- **Armoury Crate** puede sobrescribir el TDP y las curvas al cambiar de modo desde su interfaz o el botón del Ally.
+- Cambiar el modo ASUS restaura las curvas y los límites de potencia de fábrica de ese modo (así funciona el firmware).
+
+### Pruebas realizadas (ROG Ally RC71L, como administrador)
+
+| Control | Resultado |
+|---|---|
+| Volumen, silencio, brillo, modo de energía de Windows | Aplicados y releídos correctamente |
+| Modo ASUS Turbo → Silent | Ventiladores de 5400 a 3400 RPM en 20 s |
+| Curva de ventilador CPU | CPU de 3100 a 5500 RPM; curvas decrecientes rechazadas |
+| TDP 8 W vs Turbo de fábrica | Rendimiento multinúcleo al ~20 %; volver a Turbo restaura el 100 % |
+| TDP fuera de rango (50 W) | Recortado a `TdpMax` (30 W) |
+| Presets de pantallas | Guardar, aplicar, validar y borrar OK con la pantalla interna (no hubo monitor externo para probar varias) |
+| Inicio con Windows | Tarea creada elevada, con batería y sin límite; se quita bien |
+| CPU sin PawnIO | 57–60 °C (ACPI), 11–13 W (RAPL), ~3600 MHz efectivos |
+| Micrófono | Silenciar y activar OK |
+| Frecuencia de pantalla | 120 → 60 → 120 Hz OK; modos no soportados rechazados |
+| Límite de carga | 100 % aplicado y guardado; valores fuera de 40–100 rechazados |
+| Dashboards | Crear, agregar los 4 tipos de widget, redimensionar, mover, guardar, recargar y borrar OK |
+| Apps | 114 apps listadas; íconos con transparencia; Calculadora abierta desde el widget sin admin; ids fuera de la lista rechazados |
+| HTTPS | Cadena validada con OpenSSL contra la CA propia; el certificado incluye la IP, `localhost` y el nombre de la PC |
+| Descubrimiento | Una PC simulada por UDP aparece en `/api/peers` y en el selector; los paquetes inválidos se ignoran |
+| Varias PCs | Sesión anterior migrada; vinculación por dirección entre orígenes (PIN incorrecto rechazado); API y WebSocket hacia la PC elegida |
+| App instalada en un celu real | No probada (requiere instalar la CA en el teléfono) |
+| Salida de audio | No probada (el Ally tiene un solo dispositivo de salida) |
+| Multimedia, suspender, apagar, ventiladores de placa, modos de proyección | No probados (el Ally no tiene ventiladores controlables por LibreHardwareMonitor) |
+- Al cerrar InfoPanel, los ventiladores de placa vuelven a automático.
+- Es HTTP en la red local: el PIN y los tokens protegen el acceso, pero no hay cifrado. No exponer el puerto a Internet.
