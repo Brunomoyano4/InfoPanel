@@ -23,6 +23,8 @@
     .setup .ok { color: var(--accent); font-weight: 600; }
     .setup .bad { color: var(--hot); }
     .setup .btn { display: inline-block; text-decoration: none; margin-top: 6px; }
+    .setup .os { color: var(--accent); font-weight: 600; }
+    .setup .other { background: none; border: 0; padding: 0; margin-top: 8px; color: var(--muted); text-decoration: underline; font-size: 13px; }
   </style>
 </head>
 <body>
@@ -45,15 +47,16 @@
 
     <section class="card">
       <h2><span class="n">1</span> Instalá el certificado de esta PC</h2>
+      <p class="note hidden" id="os-line">Instrucciones para <span class="os" id="os-name"></span></p>
       <a class="btn primary" href="/ca.crt" download>Descargar certificado</a>
-      <details open>
+      <details open data-os="android">
         <summary>Android</summary>
         <ol>
           <li>Abrí <b>Ajustes</b> y buscá <b>"certificado de CA"</b> (también puede estar en Seguridad → Más ajustes de seguridad → Encriptación y credenciales → Instalar un certificado).</li>
           <li>Elegí <b>Certificado de CA</b>, tocá <b>Instalar de todas formas</b> y seleccioná el archivo <b>InfoPanel-….crt</b> de Descargas.</li>
         </ol>
       </details>
-      <details>
+      <details data-os="ios">
         <summary>iPhone / iPad</summary>
         <ol>
           <li>Abrí esta página en <b>Safari</b> y tocá "Descargar certificado"; aceptá descargar el perfil.</li>
@@ -61,6 +64,22 @@
           <li>Ajustes → General → Información → <b>Ajustes de confianza de certificados</b> → activá "InfoPanel CA".</li>
         </ol>
       </details>
+      <details data-os="windows">
+        <summary>PC con Windows</summary>
+        <ol>
+          <li>Abrí el archivo <b>InfoPanel-….crt</b> descargado y tocá <b>Instalar certificado</b>.</li>
+          <li>Elegí <b>Usuario actual</b>, después <b>Colocar todos los certificados en el siguiente almacén</b> → <b>Entidades de certificación raíz de confianza</b>, y aceptá.</li>
+          <li>Cerrá y volvé a abrir el navegador.</li>
+        </ol>
+      </details>
+      <details data-os="mac">
+        <summary>Mac</summary>
+        <ol>
+          <li>Abrí el archivo descargado: se agrega a <b>Acceso a Llaveros</b>.</li>
+          <li>Abrí "InfoPanel CA", desplegá <b>Confiar</b> y elegí <b>Confiar siempre</b>.</li>
+        </ol>
+      </details>
+      <button class="other hidden" id="other-os">Ver instrucciones para otro dispositivo</button>
       <p class="note">El certificado solo sirve para las conexiones con InfoPanel de esta PC: lo genera la propia PC y no sale de tu red.</p>
     </section>
 
@@ -75,7 +94,9 @@
       <a class="btn primary" id="open" href="#">Abrir InfoPanel seguro</a>
       <ol>
         <li>Vinculá con el PIN (está en el menú del ícono de InfoPanel, junto al reloj de la PC).</li>
-        <li>En el menú del navegador (⋮) elegí <b>Instalar app</b> o <b>Agregar a la pantalla principal</b>.</li>
+        <li data-os="android">En el menú de Chrome (⋮) elegí <b>Instalar app</b> o <b>Agregar a la pantalla principal</b>.</li>
+        <li data-os="ios">En Safari tocá <b>Compartir</b> (el cuadrado con la flecha) → <b>Agregar a inicio</b>.</li>
+        <li data-os="windows mac">En Chrome o Edge, tocá el ícono de <b>Instalar</b> en la barra de direcciones (o menú ⋮ → <b>Instalar InfoPanel</b>).</li>
       </ol>
       <p class="note">Desde la app podés agregar otras PCs de la red. Para cada una nueva, instalá también su certificado desde su propia página de instalación.</p>
     </section>
@@ -92,6 +113,26 @@
       document.getElementById('webview').classList.remove('hidden');
       document.getElementById('open-chrome').href =
         `intent://${location.host}${location.pathname}#Intent;scheme=http;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(location.href)};end`;
+    }
+
+    // Detecta el dispositivo y deja solo sus instrucciones (las demás quedan a un toque)
+    const ua = navigator.userAgent;
+    const os = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) ? 'ios'
+      : /Android/.test(ua) ? 'android' : /Windows/.test(ua) ? 'windows' : /Macintosh/.test(ua) ? 'mac' : null;
+    if (os) {
+      const names = { ios: 'iPhone / iPad', android: 'Android', windows: 'Windows', mac: 'Mac' };
+      document.getElementById('os-name').textContent = names[os];
+      document.getElementById('os-line').classList.remove('hidden');
+      const others = [...document.querySelectorAll('[data-os]')].filter(x => !x.dataset.os.split(' ').includes(os));
+      others.forEach(x => x.classList.add('hidden'));
+      document.querySelector(`details[data-os="${os}"]`).open = true;
+      const more = document.getElementById('other-os');
+      more.classList.remove('hidden');
+      more.onclick = () => {
+        others.forEach(x => x.classList.remove('hidden'));
+        document.getElementById('os-line').classList.add('hidden');
+        more.classList.add('hidden');
+      };
     }
 
     // Elige la dirección HTTPS que coincide con cómo se abrió esta página (misma IP)

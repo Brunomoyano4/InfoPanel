@@ -25,16 +25,17 @@ Genera `publish/InfoPanel.exe`: un solo archivo autocontenido (win-x64, ~63 MB, 
 
 ## Panel (dashboards personalizables)
 
-La primera pestaña, **Panel**, es un dashboard armable. Arriba se elige cuál mostrar (cada dispositivo recuerda el suyo). **Editar** reemplaza el selector por una barra de una sola fila (**＋ Widget**, **⚙** ajustes, **Cancelar**, **Guardar**). Cada widget muestra su nombre y su tamaño, con ⚙ arriba a la izquierda, ✕ arriba a la derecha y la esquina para redimensionar abajo.
+La primera pestaña, **Panel**, es un dashboard armable. Arriba se elige cuál mostrar (cada dispositivo recuerda el suyo). El botón **⋯** junto al selector abre las **opciones del dashboard** elegido, sin entrar a editar: cambiarle el nombre, marcarlo como **predeterminado** en celulares y tablets y/o en escritorio (pantallas de 1100 px o más), duplicarlo o eliminarlo. Un dispositivo de ese tipo arranca siempre en su predeterminado, aunque antes haya elegido otro; cada tipo tiene uno solo, así que marcarlo en uno lo quita del otro. El predeterminado se guarda en la PC (campo `defaultFor`), así que vale para todos los celulares o computadoras que se conecten, y se marca con ★ en el selector. **Editar** reemplaza el selector por una barra de una sola fila (**＋ Widget**, **⚙** ajustes, **Cancelar**, **Guardar**). En el celu (menos de 1100 px), mientras se edita esa barra queda fija abajo en lugar de las pestañas, así está a mano aunque se baje por el dashboard. Cada widget muestra su nombre y su tamaño, con ⚙ arriba a la izquierda, ✕ arriba a la derecha y la esquina para redimensionar abajo.
 
 - **＋ Widget** agrega uno de cuatro tipos:
   - **Métrica**: CPU, GPU, memoria, batería, ventiladores, límites de potencia, red, discos o sistema.
   - **Sensor**: cualquier sensor (con buscador) como número, medidor o gráfico con mín/máx.
   - **Aplicaciones**: accesos con el ícono de cada app instalada, de escritorio o de la Store. Tocar uno la abre en la PC.
   - **Control**: volumen, brillo, multimedia, micrófono, modo de energía, modo ASUS, presets de TDP (configurables), límite de carga, Hz de pantalla, bloquear/suspender.
-- **Mover**: arrastrar el widget desde el centro (⠿).
-- **Redimensionar**: arrastrar la esquina inferior derecha, o elegir ancho/alto en ⚙.
-- **⚙** del widget lo configura y **✕** lo quita.
+- **Mover**: arrastrar el widget a cualquier celda, también dejando huecos. Con mouse se arrastra directo; en pantallas táctiles, deslizar desplaza la página y para mover hay que **mantener apretado** un momento (vibra al activarse). Mientras se arrastra, el widget sigue al dedo, una sombra marca dónde va a quedar y los widgets que estorban se corren hacia abajo con animación (vuelven a su lugar si el widget sigue de largo). Cerca del borde de la pantalla, la página se desplaza sola.
+- **Redimensionar**: arrastrar la esquina inferior derecha, o elegir ancho/alto en ⚙. Si al crecer pisa a otros, esos se corren hacia abajo.
+- Cada widget guarda su posición (`x`, `y`) además del tamaño. En una pantalla con menos columnas, los que no entran se corren a la izquierda y hacia abajo hasta que no se pisan. Los widgets nuevos (o de dashboards de versiones anteriores, sin posición) van al primer hueco libre.
+- **⚙** del widget lo configura y **✕** lo quita. Al agregar uno nuevo, elegir qué muestra (métrica, control o estilo de sensor) le propone el tamaño que mejor le queda.
 - **⚙ de la barra** (ajustes del dashboard): nombre, columnas, tamaño de celda y alto de fila con botones segmentados, más Duplicar y Eliminar.
   - **Columnas Auto** (predeterminado): la celda tiene un tamaño fijo (chica 64, mediana 76, grande 96 o muy grande 120 px) y entran tantas columnas como quepan. Un 1×1 es siempre un cuadradito, del mismo tamaño en el celu y en la PC: con celda mediana, el celu tiene 4 columnas, la tablet 8 y una pantalla de 1600 px 17. Si un widget es más ancho que las columnas disponibles, se recorta a todo el ancho. El tamaño de celda solo se muestra con columnas Auto.
   - **Columnas fijas** (4, 6, 8 o 12): la grilla siempre tiene esa cantidad y las celdas se estiran con la pantalla.
@@ -42,8 +43,11 @@ La primera pestaña, **Panel**, es un dashboard armable. Arriba se elige cuál m
 - En el celu, las ventanas de configuración salen desde abajo, de borde a borde, con las acciones en una barra al pie.
 - **Guardar** lo guarda en la PC; **Cancelar** descarta los cambios.
 - En el selector, **+ Nuevo dashboard…** crea uno vacío.
+- Si no hay predeterminado, la primera vez que un dispositivo abre una PC se elige solo el dashboard más ancho que entra completo en su pantalla (en el celu, uno de 4 columnas; en la PC, uno más ancho). Después se recuerda el elegido.
 
-Los widgets adaptan su contenido al tamaño: en una fila, las métricas muestran solo el valor principal y los controles ocultan el título, sin scroll. En widgets más grandes, si sobra contenido se puede scrollear, pero la barra solo aparece al pasar el mouse. Con columnas fijas, el mismo dashboard se ve muy distinto en el celu y en la PC; con columnas automáticas, un solo dashboard sirve para los dos. El primer dashboard ("Principal") se crea automáticamente con las tarjetas del antiguo Resumen, y las columnas se eligen según la pantalla del dispositivo que lo crea.
+Los widgets adaptan su contenido al tamaño: en una fila, las métricas muestran solo el valor principal y los controles ocultan el título, sin scroll. El título de las métricas (ícono + nombre) es igual en todos los tamaños; si no entra, se corta con "…", y en un 1×1 se muestra solo el nombre para que se lea. CPU, GPU, Memoria, Batería, Límites de potencia, Red y Aplicaciones nunca scrollean: el gráfico se achica y las barras por núcleo se ocultan si el widget es bajo. Red muestra el total de bajada/subida con su gráfico y, en widgets altos con más de un adaptador activo, el detalle de cada uno. Discos siempre muestra cada unidad con su barra de espacio, y la actividad del disco físico cuando hay lugar. En Sistema angosto, cada dato va debajo de su nombre.
+
+Los gráficos de las métricas están integrados a la tarjeta: llegan hasta los bordes de los costados (y hasta el de abajo si son lo último), con un relleno que se desvanece hacia abajo. Para eso el margen interno está en el contenido del widget (`.wbody`) y el gráfico lo cruza con márgenes negativos. En CPU, GPU, Memoria y Batería de 2 filas de alto el gráfico se oculta, porque no hay lugar. Los gráficos muestran el detalle al pasar el cursor (o tocar): el valor en ese momento, hace cuánto fue y el mínimo, promedio y máximo del historial (90 s). Mientras el historial se llena, el gráfico usa todo el ancho. En widgets más grandes, si sobra contenido se puede scrollear, pero la barra solo aparece al pasar el mouse. Con columnas fijas, el mismo dashboard se ve muy distinto en el celu y en la PC; con columnas automáticas, un solo dashboard sirve para los dos. El primer dashboard ("Principal") se crea automáticamente con las tarjetas del antiguo Resumen, y las columnas se eligen según la pantalla del dispositivo que lo crea.
 
 Las pestañas Panel y Control ocupan todo el ancho de la ventana (en escritorio, más columnas). En Control, "Límite de carga" y "Equipo" son tarjetas compactas apiladas en un solo lugar de la grilla. Sensores y Procesos son listas y se limitan a 1100 px para que se lean bien.
 
@@ -61,12 +65,15 @@ Los dashboards se guardan en `dashboards.json` junto al ejecutable (máximo 30 d
 - **CPU**: carga total y barras por núcleo, temperatura, consumo (W), clock, voltajes.
 - **GPU** (AMD / NVIDIA / Intel): carga, temperatura, consumo, clock, VRAM.
 - **Memoria** física y virtual.
-- **Batería**: nivel, carga/descarga en W, tiempo restante, desgaste.
+- **Batería**: nivel, si está enchufada (Cargando / Enchufada) o a batería (según Windows), carga/descarga en W, tiempo restante, desgaste.
 - **Ventiladores**: RPM (placa vía LibreHardwareMonitor y ASUS vía ACPI).
-- **Red**: subida/bajada por adaptador.
+- **Red**: subida/bajada total con historial, y por adaptador.
 - **Discos**: espacio, temperatura, lectura/escritura.
 - **Sistema**: versión de Windows, placa, BIOS, GPU y driver, módulos de RAM, dirección del panel y tiempo encendido.
-- **Procesos**: los 50 primeros según la columna elegida (tocar la cabecera ordena por nombre, CPU o RAM; tocarla de nuevo invierte el orden), con opción de cerrarlos.
+- **Procesos**: buscador por nombre o PID y los 50 primeros según la columna elegida (tocar la cabecera ordena por nombre, CPU o RAM; tocarla de nuevo invierte el orden), con opción de cerrarlos.
+- Suspender, Hibernar, Reiniciar y Apagar piden confirmación en una ventana de la app con el nombre de la PC (no con el diálogo del navegador, que el celu permite desactivar).
+- Tocar la pestaña en la que ya se está vuelve arriba de todo. Con una ventana abierta, el fondo no se desplaza.
+- Silenciar el audio o el micrófono cambia el botón al instante (sin esperar el próximo dato de la PC) y vuelve atrás si la PC rechaza el cambio.
 - Pestaña **Sensores** con todos los sensores crudos (mín/máx) y filtro.
 
 ### CPU sin PawnIO
@@ -76,6 +83,7 @@ Sin el driver PawnIO, LibreHardwareMonitor da 0 en temperatura, consumo y clock 
 | Dato | Fuente | Sensor |
 |---|---|---|
 | Temperatura | ACPI de ASUS (`0x00120094`) | `CPU (ACPI ASUS)` |
+| Temperatura (otras marcas, ej. Intel) | Zonas térmicas ACPI de Windows (`Thermal Zone Information\High Precision Temperature`, la más caliente) | `Zona térmica (ACPI)` |
 | Consumo del paquete | Contador de Windows `Energy Meter(RAPL_Package0_PKG)\Power` | `Package (RAPL)` |
 | Clock efectivo | `% Processor Performance` × frecuencia base | `Efectivo (Windows)` |
 
@@ -102,6 +110,8 @@ El panel toma el primer valor mayor a 0 según el orden: LHM → alternativo. Si
 | Presets de pantallas (orden/posición, resolución, Hz, principal, cuáles activas) | API CCD `SetDisplayConfig` | Todos |
 | Modo de proyección (solo interna / duplicar / extender / solo externa, como Win+P) | API CCD | Todos |
 | Iniciar con Windows | Tarea programada elevada | Todos |
+
+**Modo de energía y plan de energía** son dos ajustes distintos de Windows y la tarjeta "Energía de Windows" explica cada uno. El **modo** (Eficiencia / Equilibrado / Rendimiento) es el selector rápido de Windows 11 y se aplica encima del plan activo. El **plan** es el esquema clásico de Opciones de energía (cuándo suspender, estados del procesador, etc.); en los ASUS, Armoury Crate cambia el plan con cada modo.
 
 ## Requisitos
 
@@ -149,7 +159,7 @@ Chrome (y Safari) solo instalan una web como app (pantalla completa, ícono prop
 - Si cambia la IP de la PC, al arrancar se emite un certificado de servidor nuevo con la misma CA, así que en el celu no hay que hacer nada.
 - En el celu se instala la CA **una vez por PC**:
   1. Abrir la página de instalación: **Conectar un celular (QR)** en el ícono de la bandeja, o el aviso "Instalar como app" de la pestaña Panel (solo aparece por HTTP y se puede cerrar con ✕). Es `http://IP:5055/setup.html`.
-  2. Descargar el certificado e instalarlo como **Certificado de CA**. La página explica los pasos para Android y para iPhone.
+  2. Descargar el certificado e instalarlo como **Certificado de CA**. La página detecta el dispositivo (Android, iPhone/iPad, Windows o Mac) y muestra solo sus pasos, también para instalar la app; los de otros dispositivos quedan a un toque.
   3. **Probar** la conexión segura y **Abrir InfoPanel seguro** (`https://IP:5056`).
   4. Vincular con el PIN y elegir **Instalar app** en el menú del navegador.
 - La app instalada guarda su interfaz (service worker `sw.js`), así que abre aunque la PC no responda. Los datos en vivo nunca se guardan.
@@ -187,13 +197,16 @@ Se activa desde el ícono de la bandeja o desde la app (Control → Sesión). Cr
 
 La carpeta "Inicio" o la clave `Run` no sirven, porque Windows no lanza desde ahí apps que requieren administrador.
 
-## Presets de pantallas
+## Pantallas: disposición y presets
 
 En Control → Pantallas:
 
+- **Mapa de disposición** (como en Configuración de Windows): cada pantalla prendida es un rectángulo a escala con su número; la principal está resaltada. Se arrastra una pantalla y al soltarla se pega al borde de la más cercana, alineando bordes cercanos y sin pisarse. **Aplicar ubicación** la manda a Windows (la principal queda en 0,0 y las demás se corren igual); **Deshacer** vuelve a la actual. Un toque sin arrastrar no cuenta como cambio, y prender, apagar o cambiar la principal descarta los movimientos sin aplicar, así el mapa siempre muestra las pantallas que están prendidas.
+- **Lista de pantallas conectadas**, también las apagadas: el interruptor prende o apaga cada una (apagar pide confirmación y siempre tiene que quedar una prendida). Al prender una, Windows elige su resolución y la ubica a un costado; después se acomoda en el mapa. **Hacer principal** cambia la pantalla principal sin mover nada.
+
 - **Guardar actual**: guarda la configuración completa de Windows (orden y posición, resolución, frecuencia, rotación, pantalla principal y cuáles están activas) con un nombre. Primero se acomoda todo en Configuración de Windows → Pantalla y después se guarda.
 - **Aplicar**: valida la configuración con las pantallas conectadas y la aplica. Si falta algún monitor del preset, Windows la rechaza y no cambia nada.
-- **Modos rápidos**: solo interna, duplicar, extender, solo externa.
+- **Modos rápidos**: solo interna, duplicar, extender, solo externa, con divisiones entre opciones. El modo actual se rellena con el color de acento: se deduce de las pantallas prendidas (una sola interna o externa, todas en el mismo lugar = duplicar, en lugares distintos = extender). Al tocar uno se marca en el momento y, si Windows lo rechaza, vuelve al real.
 
 Se guardan en `display-presets.json` junto al ejecutable. Como los identificadores de las placas de video cambian entre reinicios, al aplicar se reasignan buscando cada monitor por su id, que sí es estable.
 
@@ -308,6 +321,8 @@ El WebSocket `/ws` espera el token como primer mensaje y luego envía un JSON po
 | POST | `/api/mic` | `{ mute }` |
 | POST | `/api/asus/battery-limit` | `{ value: 40–100 }` |
 | POST | `/api/display/mode` | `{ device, width, height, hz }` |
+| POST | `/api/display/active` | `{ ids: [<id de pantalla>…] }` prende esas y apaga las demás |
+| POST | `/api/display/layout` | `{ primary: <id>, displays: [{ id, x, y }…] }` |
 | POST | `/api/display/topology` | `{ action: internal\|clone\|extend\|external }` |
 | POST | `/api/display/preset/save` | `{ action: <nombre> }` |
 | POST | `/api/display/preset/apply` | `{ action: <nombre> }` |

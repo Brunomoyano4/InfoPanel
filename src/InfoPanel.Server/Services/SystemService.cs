@@ -10,7 +10,8 @@ public record SystemInfoDto(string Windows, string Bios, string Board, List<RamM
 
 public record ProcessDto(int Pid, string Name, double Cpu, long MemoryMb);
 public record DiskDto(string Name, string Label, string Format, long TotalGb, long FreeGb);
-public record SystemDto(long UptimeSec, List<ProcessDto> Processes, List<DiskDto> Disks);
+// OnAc: true enchufada, false a batería, null sin dato (PC de escritorio o estado desconocido)
+public record SystemDto(long UptimeSec, List<ProcessDto> Processes, List<DiskDto> Disks, bool? OnAc, bool Charging);
 
 /// <summary>Datos de Windows que no cubre LibreHardwareMonitor: procesos, espacio en disco, uptime.</summary>
 public sealed class SystemService
@@ -35,7 +36,15 @@ public sealed class SystemService
             _lastDisks = SampleDisks();
             _lastDiskSample = now;
         }
-        return new SystemDto(Environment.TickCount64 / 1000, _lastTop, _lastDisks);
+        var power = System.Windows.Forms.SystemInformation.PowerStatus;
+        bool? onAc = power.PowerLineStatus switch
+        {
+            System.Windows.Forms.PowerLineStatus.Online => true,
+            System.Windows.Forms.PowerLineStatus.Offline => false,
+            _ => null,
+        };
+        var charging = power.BatteryChargeStatus.HasFlag(System.Windows.Forms.BatteryChargeStatus.Charging);
+        return new SystemDto(Environment.TickCount64 / 1000, _lastTop, _lastDisks, onAc, charging);
     }
 
     private List<ProcessDto> SampleProcesses(DateTime now)

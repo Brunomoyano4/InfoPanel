@@ -225,7 +225,6 @@ form.inline input { flex: 1; min-width: 0; padding: 10px 12px; background: var(-
   display: grid; gap: 12px;
   grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr));
   grid-auto-rows: var(--rowh, 90px);
-  grid-auto-flow: row dense;
 }
 .dash .empty { grid-column: 1 / -1; text-align: center; color: var(--muted); padding: 30px 16px; }
 
@@ -252,7 +251,7 @@ form.inline input { flex: 1; min-width: 0; padding: 10px 12px; background: var(-
 @container (max-width: 150px) {
   .wbody .big { font-size: 24px; }
   .wbody h3 small { display: none; }
-  .wbody .stats { grid-template-columns: 1fr; }
+  .wbody .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @container (min-height: 160px) { .w-sensor .big { font-size: 44px; } }
 
@@ -299,7 +298,8 @@ form.inline input { flex: 1; min-width: 0; padding: 10px 12px; background: var(-
 .w-move {
   position: absolute; inset: 0; width: 100%; background: none; border: 0; padding: 30px 8px 8px;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-  color: var(--text); cursor: grab; touch-action: none; min-width: 0;
+  color: var(--text); cursor: grab; touch-action: pan-y; min-width: 0;
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
 }
 .w-grip { font-size: 18px; color: var(--muted); line-height: 1; }
 .w-name { font-size: 13px; font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -315,7 +315,9 @@ form.inline input { flex: 1; min-width: 0; padding: 10px 12px; background: var(-
   position: absolute; right: 0; bottom: 0; width: 26px; height: 26px; border: 0; padding: 0; cursor: nwse-resize; touch-action: none;
   background: linear-gradient(135deg, transparent 52%, var(--accent) 52%); border-bottom-right-radius: var(--radius);
 }
-.widget.dragging { opacity: .7; outline-color: var(--accent); z-index: 2; }
+.widget.dragging { opacity: .85; outline-color: var(--accent); z-index: 3; box-shadow: 0 12px 32px rgba(0, 0, 0, .45); transition: none !important; }
+/* Sombra de la celda donde va a quedar el widget que se arrastra */
+.w-ghost { border-radius: var(--radius); background: var(--accent-soft); border: 1.5px dashed var(--accent-line); pointer-events: none; z-index: 0; }
 /* Widgets chicos: botones más chicos y sin el texto de tamaño, para que nada se pise */
 @container (max-width: 110px) {
   .wbtn { width: 22px; height: 22px; top: 4px; font-size: 11px; }
@@ -407,8 +409,8 @@ form.inline input { flex: 1; min-width: 0; padding: 10px 12px; background: var(-
 
 /* Botones de acción: ancho completo y pares de igual ancho */
 .btn.block { display: block; width: 100%; margin-top: 10px; }
-.pair-btns { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; margin-top: 8px; }
-.pair-btns .btn { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pair-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.pair-btns .btn { flex: 1 1 auto; white-space: nowrap; }
 #tdp-presets { margin-bottom: 4px; }
 
 /* =====================================================================
@@ -478,8 +480,8 @@ body { padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
 .fan-list .row:first-child { border-top: 0; }
 @container (max-height: 130px) {
   .wbody { justify-content: space-between; }
-  .wbody h3 { font-size: 12px; color: var(--muted); margin: 0 !important; }
-  .wbody h3 .ico, .wbody h3 small, .wbody .charts { display: none; }
+  .wbody h3 { margin: 0 !important; }
+  .wbody .charts { display: none; }
   .wbody .big { font-size: 24px; letter-spacing: 0; }
   .wbody .bar { height: 4px; margin-top: 0; }
 }
@@ -574,3 +576,119 @@ details.hw[open] summary::after { transform: rotate(-135deg); margin-top: 4px; }
 /* Equipo: los 5 botones en una fila, compactos */
 .power-btns { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
 .power-btns .btn { min-height: 38px; padding: 0 4px; font-size: 12px; }
+
+/* ---------- Contenido de los widgets según su tamaño ---------- */
+.wbody .row .n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wbody .row .v:not(.r) { flex: none; }
+/* Ventiladores y adaptadores: filas compactas, en dos columnas si el widget es ancho */
+.fan-list, .net-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr)); column-gap: 20px; }
+.fan-list .row, .net-list .row { padding: 5px 0; }
+.net-list { margin-top: 8px; }
+.net-list .row:first-child { border-top: 0; }
+/* Discos: cada unidad es nombre + espacio + barra; la actividad del disco va debajo si hay lugar */
+.drive .row { border-top: 0; padding: 2px 0 0; }
+.drive .bar { margin: 6px 0 8px; }
+.disk-hw .sub-title { margin-top: 4px; }
+.disk-hw .stats { margin-top: 4px; }
+@container (max-height: 240px) { .w-metric .disk-hw, .w-metric .net-list { display: none; } }
+@container (max-height: 130px) {
+  .wbody .fan-list .row, .wbody .net-list .row, .wbody .drive .row { display: flex; padding: 2px 0 0; }
+  .wbody .stats.keep { display: grid; margin-top: 0; }
+  .wbody .stats.keep .k { display: none; }
+  .drive .bar { margin: 4px 0; }
+}
+/* Sistema: en widgets angostos cada dato va debajo de su nombre */
+.sys .row { font-size: 14px; }
+@container (max-width: 320px) {
+  .sys .row { flex-direction: column; gap: 0; padding: 6px 0; }
+  .sys .row > span:first-child { font-size: 12px; color: var(--muted); }
+  .sys .row .v.r { text-align: left; }
+}
+
+/* ---------- Detalle de los gráficos (cursor o toque) ---------- */
+.spark-tip {
+  position: fixed; z-index: 30; pointer-events: none; max-width: 260px;
+  padding: 8px 10px; border-radius: 10px; background: var(--card-3); border: 1px solid var(--line);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .35); font-size: 13px; font-variant-numeric: tabular-nums;
+}
+.spark-tip span { color: var(--muted); }
+.spark-tip small { color: var(--muted); margin-left: 8px; }
+.spark-tip .tip-mm { color: var(--muted); font-size: 11px; margin-top: 2px; white-space: nowrap; }
+.spark-line { position: fixed; z-index: 29; width: 1px; pointer-events: none; background: var(--text); opacity: .45; }
+
+/* ---------- Ventanas: el fondo no se desplaza mientras hay una abierta ---------- */
+body:has(#modal:not(.hidden)) { overflow: hidden; }
+.modal, .modal-box { overscroll-behavior: contain; }
+
+/* Procesos: buscador */
+.proc-empty { padding: 16px; }
+/* Títulos: mismo tamaño en todos los widgets; si no entran, se cortan con "…" sin perder el ícono */
+.widget h3 { gap: 6px; }
+.widget h3 > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@container (max-width: 200px) { .wbody .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Confirmaciones */
+.confirm-text { font-size: 14px; margin: 0 0 4px; }
+.btn.danger-fill { background: var(--hot); color: #fff; border-color: transparent; font-weight: 600; }
+
+/* ---------- Disposición de pantallas ---------- */
+.dlayout { position: relative; height: 170px; margin-bottom: 8px; border-radius: var(--radius-ctl); background: var(--bg); border: 1px solid var(--line-soft); overflow: hidden; touch-action: none; }
+.dlayout:empty { display: none; }
+.dl-screen {
+  position: absolute; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  border-radius: 6px; background: var(--card-3); border: 1.5px solid var(--line); cursor: grab; user-select: none;
+  transition: left .18s ease, top .18s ease;
+}
+.dl-screen b { font-size: 18px; }
+.dl-screen small { font-size: 10px; color: var(--muted); }
+.dl-screen.primary { border-color: var(--accent); background: var(--accent-soft); }
+.dl-screen.dragging { transition: none; cursor: grabbing; z-index: 2; box-shadow: 0 6px 18px rgba(0, 0, 0, .4); }
+.dlayout-actions { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.dl-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line-soft); }
+.dl-row:first-child { border-top: 0; }
+.dl-n { flex: none; width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center; background: var(--card-3); font-size: 12px; font-weight: 700; }
+.dl-name { flex: 1; min-width: 0; }
+.dl-name b { display: block; font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dl-name small { color: var(--muted); font-size: 12px; }
+#dlist { margin-bottom: 10px; }
+
+/* Métricas de valor + gráfico: nunca scrollean; lo que no entra se oculta por tamaño y el gráfico se achica */
+.m-cpu .wbody, .m-gpu .wbody, .m-mem .wbody, .m-battery .wbody, .m-power .wbody, .m-net .wbody, .w-apps .wbody { overflow: hidden; }
+@container (max-height: 260px) { .wbody .cores { display: none; } }
+@container (max-height: 200px) { .m-cpu .wbody .stats, .m-gpu .wbody .stats { margin-top: 6px; } .m-gpu .wbody .row { display: none; } }
+/* 1×1: sin lugar para ícono y nombre, queda solo el nombre */
+@container (max-width: 120px) { .wbody h3 .ico { display: none; } }
+
+/* Energía de Windows: dos ajustes con su explicación */
+.flabel.plan-label { margin-top: 14px; }
+
+/* ---------- Gráficos integrados: llegan hasta los bordes de la tarjeta ----------
+   El margen interno pasa del widget a su contenido, así el gráfico puede salirse de ese margen con
+   márgenes negativos (el widget recorta las esquinas redondeadas). Si el gráfico es lo último de la
+   tarjeta, también llega al borde de abajo. */
+.widget { padding: 0; }
+.widget .wbody { --wpad: 16px; padding: var(--wpad); }
+.widget .charts { margin: 12px calc(-1 * var(--wpad)) 0; gap: 0; }
+.widget .charts:last-child { margin-bottom: calc(-1 * var(--wpad)); }
+.widget .charts .spark + .spark { border-top: 1px solid var(--line-soft); }
+/* Con 2 filas de alto, en las tarjetas con más datos el gráfico quedaría como una rayita: se oculta */
+@container (max-height: 200px) { .m-cpu .charts, .m-gpu .charts, .m-mem .charts, .m-battery .charts { display: none; } }
+
+/* Modos de pantalla: divisiones entre opciones (se ocultan junto a la elegida, que se rellena) */
+#topo button { position: relative; }
+#topo button + button::before { content: ""; position: absolute; left: -3px; top: 25%; bottom: 25%; width: 1px; background: var(--line); }
+#topo button.on::before, #topo button.on + button::before { display: none; }
+
+/* Editando un dashboard en el celu: la barra de edición (Widget, ajustes, Cancelar, Guardar) ocupa el
+   lugar de las pestañas de abajo, así queda a mano aunque se baje por el dashboard */
+@media (max-width: 1099px) {
+  body.dash-editing .tabs { display: none; }
+  body.dash-editing #dash-tools {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; margin: 0;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    background: var(--card); border-top: 1px solid var(--line-soft);
+  }
+}
+
+/* Interruptores dentro de ventanas: texto a la izquierda y el interruptor a la derecha, alineados */
+.modal label.toggle { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }

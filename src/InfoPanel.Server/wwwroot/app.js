@@ -127,7 +127,7 @@ let ws = null;
 let last = null;
 let info = null;
 const HIST = 90;
-const hist = { cpuTemp: [], cpuLoad: [], gpuLoad: [], cpuPower: [], memLoad: [], batLevel: [] };
+const hist = { cpuTemp: [], cpuLoad: [], gpuLoad: [], cpuPower: [], memLoad: [], batLevel: [], netDown: [], netUp: [] };
 const touched = {}; // id de control -> último momento en que el usuario lo tocó
 
 // ================= Utilidades =================
@@ -196,13 +196,72 @@ function push(arr, v) {
   if (arr.length > HIST) arr.shift();
 }
 
-function spark(values, max, color = 'var(--accent)') {
-  const pts = values.map((v, i) => v == null ? null : `${(i / (HIST - 1) * 100).toFixed(1)},${(40 - Math.min(v / max, 1) * 38).toFixed(1)}`).filter(Boolean);
+// Gráfico de línea del historial. fmt dice cómo mostrar los valores en el detalle al pasar el cursor
+// (ver SPARK_FMT; 's:<tipo>' usa el formato de ese tipo de sensor) y label qué se está midiendo.
+// Mientras el historial se llena, los puntos se reparten en todo el ancho.
+let sparkSeq = 0;
+function spark(values, max, color = 'var(--accent)', fmt = 'pct', label = '') {
+  const n = values.length;
+  const pts = values.map((v, i) => v == null ? null : `${(n > 1 ? i / (n - 1) * 100 : 100).toFixed(1)},${(40 - Math.min(v / max, 1) * 38).toFixed(1)}`).filter(Boolean);
   // Área suave bajo la línea: le da cuerpo al gráfico cuando el valor es estable
-  const area = pts.length > 1 ? `<polygon points="${pts[0].split(',')[0]},40 ${pts.join(' ')} ${pts[pts.length - 1].split(',')[0]},40" fill="${color}" fill-opacity=".1"/>` : '';
-  return `<svg class="spark" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true">${area}
+  // Relleno que se desvanece hacia abajo. Cada gráfico tiene su propio degradado: si se compartiera,
+  // y el primero quedara oculto (pestaña o widget chico), el navegador no pintaría ninguno.
+  // El color va en style porque los atributos de SVG no resuelven variables CSS.
+  const gid = 'sg' + (++sparkSeq);
+  const area = pts.length > 1 ? `<defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:${color};stop-opacity:.3"/><stop offset="1" style="stop-color:${color};stop-opacity:0"/></linearGradient></defs>
+    <polygon points="${pts[0].split(',')[0]},40 ${pts.join(' ')} ${pts[pts.length - 1].split(',')[0]},40" fill="url(#${gid})"/>` : '';
+  const data = values.map(v => v == null ? '' : +v.toFixed(2)).join(',');
+  return `<svg class="spark" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true" data-v="${data}" data-f="${fmt}" data-l="${esc(label)}">${area}
     <polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg>`;
 }
+
+// Detalle de los gráficos: al pasar el cursor (o tocar) se ve el valor de ese momento, hace cuánto
+// fue y el mínimo, promedio y máximo del historial. Se actualiza solo con cada dato nuevo.
+const SPARK_FMT = {
+  pct: v => `${num(v)} %`,
+  temp: v => `${num(v, 1)} °C`,
+  w: v => `${num(v, 1)} W`,
+  bps: v => fmtBytes(v, true),
+};
+const sparkFmt = k => k?.startsWith('s:') ? v => fmtSensor(k.slice(2), v) : SPARK_FMT[k] || (v => num(v, 1));
+const sparkTip = document.createElement('div');
+sparkTip.className = 'spark-tip hidden';
+const sparkLine = document.createElement('div');
+sparkLine.className = 'spark-line hidden';
+document.body.append(sparkTip, sparkLine);
+let tipAt = null;
+
+function showSparkTip() {
+  const svg = tipAt && document.elementFromPoint(tipAt.x, tipAt.y)?.closest('svg.spark');
+  if (!svg || svg.closest('.editing') || !svg.dataset.v) {
+    sparkTip.classList.add('hidden');
+    sparkLine.classList.add('hidden');
+    return;
+  }
+  const vals = svg.dataset.v.split(',').map(x => x === '' ? null : +x);
+  const known = vals.filter(x => x != null);
+  if (!known.length) return;
+  const f = sparkFmt(svg.dataset.f);
+  const r = svg.getBoundingClientRect();
+  const n = vals.length;
+  const i = Math.max(0, Math.min(n - 1, Math.round((tipAt.x - r.left) / r.width * (n - 1))));
+  const ago = n - 1 - i; // un dato por segundo
+  const avg = known.reduce((a, b) => a + b, 0) / known.length;
+  sparkTip.innerHTML = `<div><b>${vals[i] == null ? '—' : f(vals[i])}</b>${svg.dataset.l ? ` <span>${esc(svg.dataset.l)}</span>` : ''}
+    <small>${ago ? `hace ${fmtDuration(ago) === '0m' ? ago + ' s' : fmtDuration(ago)}` : 'ahora'}</small></div>
+    <div class="tip-mm">mín ${f(Math.min(...known))} · prom ${f(avg)} · máx ${f(Math.max(...known))}</div>`;
+  const x = r.left + (n > 1 ? i / (n - 1) : 1) * r.width;
+  sparkLine.style.cssText = `left:${x}px;top:${r.top}px;height:${r.height}px`;
+  sparkTip.classList.remove('hidden');
+  sparkLine.classList.remove('hidden');
+  const tw = sparkTip.offsetWidth, th = sparkTip.offsetHeight;
+  sparkTip.style.left = Math.max(8, Math.min(innerWidth - tw - 8, x - tw / 2)) + 'px';
+  sparkTip.style.top = (r.top - th - 8 > 8 ? r.top - th - 8 : r.bottom + 8) + 'px';
+}
+document.addEventListener('pointermove', e => { tipAt = { x: e.clientX, y: e.clientY }; showSparkTip(); });
+document.addEventListener('pointerdown', e => { tipAt = { x: e.clientX, y: e.clientY }; showSparkTip(); });
+addEventListener('scroll', () => { tipAt = null; showSparkTip(); }, { passive: true });
+setInterval(showSparkTip, 1000);
 
 // ================= PCs y conexión =================
 // La app puede manejar varias PCs: cada una se guarda como { id, name, url, token } y todas las llamadas
@@ -441,6 +500,8 @@ if ('serviceWorker' in navigator && isSecureContext) navigator.serviceWorker.reg
 
 // Pestañas
 document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => {
+  // Tocar la pestaña en la que ya se está vuelve arriba de todo
+  if (b.classList.contains('active')) return scrollTo({ top: 0, behavior: 'smooth' });
   document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('active', x === b));
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.dataset.view === b.dataset.tab));
   store.set('ip_tab', b.dataset.tab);
@@ -536,6 +597,8 @@ function tick(d) {
   push(hist.gpuLoad, summary.gpus[0]?.load);
   push(hist.memLoad, summary.mem?.load);
   push(hist.batLevel, summary.battery?.level);
+  push(hist.netDown, summary.net.reduce((a, n) => a + n.down, 0));
+  push(hist.netUp, summary.net.reduce((a, n) => a + n.up, 0));
 }
 
 // Encabezado de tarjeta: ícono + título + dato secundario a la derecha
@@ -556,7 +619,7 @@ const METRICS = {
           ${stat('Uptime', fmtDuration(d.system?.uptimeSec))}
         </div>
         ${s.cpu.cores.length ? `<div class="cores" title="Carga por núcleo">${s.cpu.cores.map(v => `<i style="--h:${Math.min(v, 100)}%"></i>`).join('')}</div>` : ''}
-        <div class="charts">${spark(hist.cpuLoad, 100)}${spark(hist.cpuTemp, 100, 'var(--warn)')}</div>`;
+        <div class="charts">${spark(hist.cpuLoad, 100, undefined, 'pct', 'Carga')}${spark(hist.cpuTemp, 100, 'var(--warn)', 'temp', 'Temperatura')}</div>`;
     },
   },
   gpu: {
@@ -574,7 +637,7 @@ const METRICS = {
           ${stat('Clock', `${num(g.clock)} MHz`)}
         </div>
         ${g.vramUsed != null ? `<div class="row"><span>VRAM</span><span class="v">${num(g.vramUsed)}${g.vramTotal ? ' / ' + num(g.vramTotal) : ''} MB</span></div>` : ''}
-        ${i === 0 ? `<div class="charts">${spark(hist.gpuLoad, 100, 'var(--info)')}</div>` : ''}`;
+        ${i === 0 ? `<div class="charts">${spark(hist.gpuLoad, 100, 'var(--info)', 'pct', 'Carga')}</div>` : ''}`;
     },
   },
   mem: {
@@ -585,7 +648,7 @@ const METRICS = {
       return `${head('mem', 'Memoria', `${num(s.mem.load)} % en uso`)}
         <div class="big">${num(s.mem.used, 1)}<small>/ ${num(total, 1)} GB</small></div>
         <div class="bar ${s.mem.load >= 90 ? 'hot' : s.mem.load >= 80 ? 'warn' : ''}"><i style="width:${s.mem.load || 0}%"></i></div>
-        <div class="charts">${spark(hist.memLoad, 100)}</div>
+        <div class="charts">${spark(hist.memLoad, 100, undefined, 'pct', 'En uso')}</div>
         <div class="stats end">
           ${stat('Usada', `${num(s.mem.used, 1)} GB`)}
           ${stat('Libre', `${num(s.mem.avail, 1)} GB`)}
@@ -598,13 +661,16 @@ const METRICS = {
     render(d, s) {
       const b = s.battery;
       if (!b) return null;
-      return `${head('battery', 'Batería', b.charging ? 'Cargando' : 'Descargando')}
+      // Windows dice si está enchufada; el sensor de carga solo sirve si no hay ese dato
+      const onAc = d.system?.onAc ?? b.charging;
+      const state = onAc ? (d.system?.charging || b.charging ? 'Cargando' : 'Enchufada') : 'Con batería';
+      return `${head('battery', 'Batería', `${onAc ? icon('bolt', 13) : ''}${state}`)}
         <div class="big">${num(b.level)}<small>%</small></div>
         <div class="bar ${b.level <= 15 ? 'hot' : ''}"><i style="width:${b.level || 0}%"></i></div>
-        <div class="charts">${spark(hist.batLevel, 100)}</div>
+        <div class="charts">${spark(hist.batLevel, 100, undefined, 'pct', 'Carga')}</div>
         <div class="stats end">
-          ${stat(b.charging ? 'Carga' : 'Descarga', `${num(b.rate, 1)} W`)}
-          ${stat('Restante', b.remaining ? fmtDuration(b.remaining) : '—')}
+          ${stat(onAc ? 'Carga' : 'Descarga', `${num(b.rate, 1)} W`)}
+          ${stat('Restante', !onAc && b.remaining ? fmtDuration(b.remaining) : '—')}
           ${stat('Desgaste', b.wear != null ? `${num(b.wear, 1)} %` : '—')}
         </div>`;
     },
@@ -614,7 +680,7 @@ const METRICS = {
     render(d, s) {
       if (!s.fans.length) return null;
       return `${head('fan', 'Ventiladores', d.asus?.available ? `Modo ${esc(d.asus.modeName)}` : '')}
-        <div class="fan-list">${s.fans.map(f => `<div class="row"><span>${esc(f.name)}</span><span class="v">${num(f.rpm)} RPM</span></div>`).join('')}</div>`;
+        <div class="fan-list">${s.fans.map(f => `<div class="row"><span class="n">${esc(f.name)}</span><span class="v">${num(f.rpm)} RPM</span></div>`).join('')}</div>`;
     },
   },
   power: {
@@ -629,39 +695,47 @@ const METRICS = {
           ${stat('sPPT', v(tdp.sppt))}
           ${stat('fPPT', v(tdp.fppt))}
         </div>
-        <div class="charts">${spark(hist.cpuPower, Math.max(tdp.fppt || 30, 10), 'var(--info)')}</div>`;
+        <div class="charts">${spark(hist.cpuPower, Math.max(tdp.fppt || 30, 10), 'var(--info)', 'w', 'Consumo del CPU')}</div>`;
     },
   },
   net: {
     name: 'Red',
     render(d, s) {
       if (!s.net.length) return null;
-      // Columnas fijas para que los valores no salten de renglón al cambiar
+      // Total de todos los adaptadores, su historial y, si hay más de uno activo, el detalle de cada uno
       const active = s.net.filter(n => n.up + n.down > 0);
-      return `${head('wifi', 'Red')}
-        ${(active.length ? active : s.net.slice(0, 2)).map(n => `
-          <div class="sub-title">${esc(n.name)}</div>
-          <div class="stats two">
-            ${stat('↓ Bajada', fmtBytes(n.down, true))}
-            ${stat('↑ Subida', fmtBytes(n.up, true))}
-          </div>`).join('')}`;
+      const down = s.net.reduce((a, n) => a + n.down, 0), up = s.net.reduce((a, n) => a + n.up, 0);
+      const peak = arr => Math.max(1024, ...arr.filter(v => v != null)) * 1.1;
+      return `${head('wifi', 'Red', active.length === 1 ? esc(active[0].name) : active.length > 1 ? `${active.length} adaptadores` : '')}
+        <div class="stats two keep">
+          ${stat('Bajada', `↓ ${fmtBytes(down, true)}`)}
+          ${stat('Subida', `↑ ${fmtBytes(up, true)}`)}
+        </div>
+        <div class="charts">${spark(hist.netDown, peak(hist.netDown), undefined, 'bps', 'Bajada')}${spark(hist.netUp, peak(hist.netUp), 'var(--info)', 'bps', 'Subida')}</div>
+        ${active.length > 1 ? `<div class="net-list">${active.map(n => `<div class="row"><span class="n">${esc(n.name)}</span>
+          <span class="v">↓ ${fmtBytes(n.down, true)} · ↑ ${fmtBytes(n.up, true)}</span></div>`).join('')}</div>` : ''}`;
     },
   },
   disks: {
     name: 'Discos',
     render(d, s) {
       if (!d.system?.disks?.length && !s.storage.length) return null;
+      // Cada unidad con su barra de espacio (siempre visible); la actividad de los discos físicos, si entra
       return `${head('disk', 'Discos')}
-        ${(d.system?.disks || []).map(k => `
-          <div class="row"><span>${esc(k.name)} ${esc(k.label)}</span><span class="v">${k.totalGb - k.freeGb} / ${k.totalGb} GB</span></div>
-          <div class="bar"><i style="width:${k.totalGb ? (k.totalGb - k.freeGb) / k.totalGb * 100 : 0}%"></i></div>`).join('')}
-        ${s.storage.map(st => `
+        ${(d.system?.disks || []).map(k => {
+          const pct = k.totalGb ? (k.totalGb - k.freeGb) / k.totalGb * 100 : 0;
+          return `<div class="drive">
+            <div class="row"><span class="n">${esc(k.name)} ${esc(k.label)}</span><span class="v">${k.totalGb - k.freeGb} / ${k.totalGb} GB</span></div>
+            <div class="bar ${pct >= 90 ? 'hot' : ''}"><i style="width:${pct}%"></i></div>
+          </div>`;
+        }).join('')}
+        ${s.storage.map(st => `<div class="disk-hw">
           <div class="sub-title">${esc(st.name)}</div>
           <div class="stats">
             ${stat('Temperatura', `${num(st.temp)} °C`, tempClass(st.temp))}
             ${stat('Lectura', fmtBytes(st.read, true))}
             ${stat('Escritura', fmtBytes(st.write, true))}
-          </div>`).join('')}`;
+          </div></div>`).join('')}`;
     },
   },
   system: {
@@ -669,17 +743,166 @@ const METRICS = {
     render(d) {
       const si = info?.system;
       if (!si) return null;
-      return `${head('info', 'Sistema')}
+      return `${head('info', 'Sistema')}<div class="sys">
         <div class="row"><span>Windows</span><span class="v r">${esc(si.windows)}</span></div>
+        <div class="row"><span>Encendido hace</span><span class="v r">${fmtDuration(d.system?.uptimeSec)}</span></div>
+        ${(info.urls || []).map(u => `<div class="row"><span>Dirección</span><span class="v r">${esc(u.replace('http://', ''))}</span></div>`).join('')}
         <div class="row"><span>Placa</span><span class="v r">${esc(si.board)}</span></div>
         <div class="row"><span>BIOS</span><span class="v r">${esc(si.bios)}</span></div>
         ${si.gpus.map(g => `<div class="row"><span>${esc(g.name)}</span><span class="v r">Driver ${esc(g.driver)}</span></div>`).join('')}
         ${ramGroups(si.ram).map(g => `<div class="row"><span>RAM</span><span class="v r">${g.count > 1 ? g.count + ' × ' : ''}${g.sizeGb} GB · ${g.speedMts} MT/s · ${esc(g.manufacturer)}</span></div>`).join('')}
-        ${(info.urls || []).map(u => `<div class="row"><span>Dirección</span><span class="v r">${esc(u.replace('http://', ''))}</span></div>`).join('')}
-        <div class="row"><span>Encendido hace</span><span class="v r">${fmtDuration(d.system?.uptimeSec)}</span></div>`;
+        </div>`;
     },
   },
 };
+
+// ================= Disposición de pantallas =================
+// Mapa como el de Configuración de Windows: cada pantalla prendida es un rectángulo a escala que se
+// arrastra; al soltarlo se pega al borde de la más cercana. Los cambios se aplican con "Aplicar
+// ubicación". Debajo, la lista de pantallas conectadas para prenderlas, apagarlas o hacerlas principal.
+let layoutDraft = null;   // copia editable mientras hay cambios sin aplicar
+let layoutSig = '';
+let layoutView = null;    // escala y origen del mapa dibujado
+
+function renderDisplayLayout(layout) {
+  const sig = JSON.stringify(layout);
+  // Si cambió qué pantallas están prendidas, los movimientos sin aplicar ya no sirven
+  const activeIds = l => l.filter(d => d.active !== false).map(d => d.id).sort().join();
+  if (layoutDraft && activeIds(layoutDraft) !== activeIds(layout)) discardLayoutDraft();
+  if (layoutDraft || sig === layoutSig) return;
+  layoutSig = sig;
+  drawLayoutMap(layout.filter(d => d.active).map(d => ({ ...d })));
+  $('#dlist').innerHTML = layout.map((d, i) => `<div class="dl-row">
+    <span class="dl-n">${i + 1}</span>
+    <div class="dl-name"><b>${esc(d.internal ? 'Pantalla interna' : d.name)}</b>
+      <small>${d.active ? `${d.width}×${d.height}${d.primary ? ' · principal' : ''}` : 'Apagada'}</small></div>
+    ${d.active && !d.primary ? `<button class="btn sm" data-primary="${esc(d.id)}">Hacer principal</button>` : ''}
+    <button class="switch" role="switch" aria-checked="${d.active}" data-toggle="${esc(d.id)}" aria-label="${d.active ? 'Apagar' : 'Prender'} ${esc(d.name)}"></button>
+  </div>`).join('') || '<p class="note">No se pudo leer qué pantallas hay conectadas.</p>';
+}
+
+// Modo de Win+P que corresponde a las pantallas prendidas: solo la interna, solo externas,
+// todas en el mismo lugar (duplicar) o en lugares distintos (extender)
+function topologyOf(layout) {
+  const on = layout.filter(d => d.active);
+  if (!on.length || layout.length < 2) return null;
+  if (on.length === 1) return on[0].internal ? 'internal' : 'external';
+  if (on.every(d => d.x === on[0].x && d.y === on[0].y)) return 'clone';
+  return on.some(d => d.internal) ? 'extend' : 'external';
+}
+const markTopology = t => document.querySelectorAll('#topo button').forEach(b => b.classList.toggle('on', b.dataset.v === t));
+
+function discardLayoutDraft() {
+  layoutDraft = null;
+  layoutSig = '';
+  $('#dl-actions').classList.add('hidden');
+}
+
+// Dibuja los rectángulos a escala, centrados en el mapa
+function drawLayoutMap(list) {
+  const box = $('#dlayout');
+  if (!list.length) { box.innerHTML = ''; return; }
+  const all = last?.controls?.displayLayout || [];
+  const numOf = id => all.findIndex(x => x.id === id) + 1;
+  const minX = Math.min(...list.map(d => d.x)), minY = Math.min(...list.map(d => d.y));
+  const bw = Math.max(...list.map(d => d.x + d.width)) - minX, bh = Math.max(...list.map(d => d.y + d.height)) - minY;
+  const W = box.clientWidth || 300, H = 170;
+  const scale = Math.min((W - 24) / bw, (H - 24) / bh);
+  layoutView = { scale, ox: (W - bw * scale) / 2 - minX * scale, oy: (H - bh * scale) / 2 - minY * scale, list };
+  box.innerHTML = list.map(d => `<div class="dl-screen ${d.primary ? 'primary' : ''}" data-id="${esc(d.id)}"
+      style="left:${layoutView.ox + d.x * scale}px;top:${layoutView.oy + d.y * scale}px;width:${d.width * scale - 3}px;height:${d.height * scale - 3}px">
+      <b>${numOf(d.id)}</b>${d.primary ? '<small>principal</small>' : ''}</div>`).join('');
+}
+
+// Al soltar, la pantalla se pega al costado (o arriba/abajo) de otra, alineando bordes cercanos, sin pisarse
+function snapScreen(d, others) {
+  const overlaps = (x, y) => others.some(o => x < o.x + o.width && x + d.width > o.x && y < o.y + o.height && y + d.height > o.y);
+  const near = (v, targets) => { const t = targets.find(t => Math.abs(v - t) < Math.max(d.width, d.height) * .08); return t ?? v; };
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  let best = null;
+  for (const o of others) {
+    const ys = [o.y, o.y + o.height - d.height];
+    const xs = [o.x, o.x + o.width - d.width];
+    const cands = [
+      [o.x - d.width, near(clamp(d.y, o.y - d.height + 1, o.y + o.height - 1), ys)],
+      [o.x + o.width, near(clamp(d.y, o.y - d.height + 1, o.y + o.height - 1), ys)],
+      [near(clamp(d.x, o.x - d.width + 1, o.x + o.width - 1), xs), o.y - d.height],
+      [near(clamp(d.x, o.x - d.width + 1, o.x + o.width - 1), xs), o.y + o.height],
+    ];
+    for (const [x, y] of cands) {
+      if (overlaps(x, y)) continue;
+      const dist = Math.hypot(x - d.x, y - d.y);
+      if (!best || dist < best.dist) best = { x: Math.round(x), y: Math.round(y), dist };
+    }
+  }
+  if (best) { d.x = best.x; d.y = best.y; }
+}
+
+function bindDisplayLayout() {
+  const box = $('#dlayout');
+  let drag = null;
+  box.onpointerdown = e => {
+    const el = e.target.closest('.dl-screen');
+    if (!el || !layoutView || layoutView.list.length < 2) return;
+    e.preventDefault();
+    // La copia editable recién se crea al moverse: un toque solo no deja cambios pendientes
+    const d = layoutView.list.find(x => x.id === el.dataset.id);
+    drag = { el, id: d.id, px: e.clientX, py: e.clientY, x0: d.x, y0: d.y, moved: false };
+    try { box.setPointerCapture(e.pointerId); } catch { /* puntero ya liberado */ }
+  };
+  box.onpointermove = e => {
+    if (!drag) return;
+    if (!drag.moved) {
+      if (Math.hypot(e.clientX - drag.px, e.clientY - drag.py) < 5) return;
+      drag.moved = true;
+      layoutDraft ||= layoutView.list.map(d => ({ ...d }));
+      drag.d = layoutDraft.find(x => x.id === drag.id);
+      drag.el.classList.add('dragging');
+    }
+    const { scale, ox, oy } = layoutView;
+    drag.d.x = Math.round(drag.x0 + (e.clientX - drag.px) / scale);
+    drag.d.y = Math.round(drag.y0 + (e.clientY - drag.py) / scale);
+    drag.el.style.left = ox + drag.d.x * scale + 'px';
+    drag.el.style.top = oy + drag.d.y * scale + 'px';
+  };
+  box.onpointerup = box.onpointercancel = () => {
+    if (!drag) return;
+    const moved = drag.moved;
+    if (moved) snapScreen(drag.d, layoutDraft.filter(x => x !== drag.d));
+    drag = null;
+    if (!moved) return;
+    drawLayoutMap(layoutDraft);
+    $('#dl-actions').classList.remove('hidden');
+  };
+  const reset = () => { discardLayoutDraft(); if (last) renderDisplayLayout(last.controls.displayLayout || []); };
+  $('#dl-undo').onclick = reset;
+  $('#dl-apply').onclick = async () => {
+    const primary = layoutDraft.find(d => d.primary) || layoutDraft[0];
+    const ok = await act('/display/layout', { primary: primary.id, displays: layoutDraft.map(d => ({ id: d.id, x: d.x, y: d.y })) }, 'Ubicación aplicada');
+    if (ok) reset();
+  };
+  // El mapa se dibuja a la escala del ancho disponible (también al mostrar la pestaña Control)
+  new ResizeObserver(() => { if (!drag && layoutView) drawLayoutMap(layoutDraft || layoutView.list); }).observe(box);
+  $('#dlist').onclick = async e => {
+    const tg = e.target.closest('[data-toggle]');
+    const pr = e.target.closest('[data-primary]');
+    const layout = last?.controls?.displayLayout || [];
+    if (tg || pr) discardLayoutDraft();
+    if (tg) {
+      const on = tg.getAttribute('aria-checked') !== 'true';
+      const ids = layout.filter(d => d.id === tg.dataset.toggle ? on : d.active).map(d => d.id);
+      if (!ids.length) return toast('Tiene que quedar al menos una pantalla prendida');
+      const d = layout.find(x => x.id === tg.dataset.toggle);
+      if (!on && !await askConfirm(`¿Apagar ${d.internal ? 'la pantalla interna' : d.name}?`, 'Si después no ves nada en la PC, la podés volver a prender desde acá.', 'Apagar')) return;
+      tg.setAttribute('aria-checked', String(on));
+      if (!await act('/display/active', { ids }, on ? 'Pantalla prendida' : 'Pantalla apagada')) tg.setAttribute('aria-checked', String(!on));
+    }
+    if (pr) {
+      const act_ = layout.filter(d => d.active);
+      act('/display/layout', { primary: pr.dataset.primary, displays: act_.map(d => ({ id: d.id, x: d.x, y: d.y })) }, 'Pantalla principal cambiada');
+    }
+  };
+}
 
 // ================= Sensores =================
 let sensorSig = '';
@@ -709,10 +932,10 @@ function renderSensors(d) {
     $('#sensor-types').innerHTML = [['all', 'Todos'], ...types.map(t => [t, typeLabel(t)])]
       .map(([t, l]) => `<button type="button" data-type="${esc(t)}" class="${t === sensorType ? 'on' : ''}">${esc(l)}</button>`).join('');
 
-    $('#sensors').innerHTML = d.hardware.map((h, i) => {
+    $('#sensors').innerHTML = d.hardware.map(h => {
       const groups = {};
       h.sensors.forEach(s => (groups[s.type] ||= []).push(s));
-      return `<details class="hw" data-id="${esc(h.id)}" ${open.has(h.id) || (!open.size && i === 0) ? 'open' : ''}>
+      return `<details class="hw" data-id="${esc(h.id)}" ${open.has(h.id) ? 'open' : ''}>
         <summary>${icon(HW_ICONS[h.type] || 'sliders')}<span class="hw-name">${esc(h.name)}</span><small>${h.sensors.length}</small></summary>
         ${Object.entries(groups).map(([type, list]) => `
           <div class="sgroup" data-type="${esc(type)}"><h4>${esc(typeLabel(type))}</h4>
@@ -769,7 +992,8 @@ let procSort = { key: store.get('ip_psort') || 'cpu', desc: store.get('ip_pdesc'
 
 function renderProcesses(d) {
   const { key, desc } = procSort;
-  const list = [...(d.system?.processes || [])].sort((a, b) => {
+  const q = $('#proc-filter').value.trim().toLowerCase();
+  const list = (d.system?.processes || []).filter(p => !q || p.name.toLowerCase().includes(q) || String(p.pid).startsWith(q)).sort((a, b) => {
     const r = key === 'name' ? a.name.localeCompare(b.name) : a[key] - b[key];
     return desc ? -r : r;
   }).slice(0, PROC_LIMIT);
@@ -783,9 +1007,10 @@ function renderProcesses(d) {
       <span class="r cpu"><span>${num(p.cpu, 1)} %</span><i style="--w:${Math.min(100, p.cpu * 6)}%"></i></span>
       <span class="r">${fmtBytes(p.memoryMb * 1024 * 1024)}</span>
       <button class="kill" data-kill="${p.pid}" data-name="${esc(p.name)}" aria-label="Cerrar ${esc(p.name)}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
-    </div>`).join('')}
+    </div>`).join('') || `<p class="note proc-empty">${q ? 'Ningún proceso coincide con la búsqueda.' : 'Sin datos.'}</p>`}
   </div>`;
 }
+$('#proc-filter').addEventListener('input', () => { if (last) renderProcesses(last); });
 
 $('#processes').addEventListener('click', e => {
   const s = e.target.closest('[data-sort]');
@@ -847,12 +1072,16 @@ function buildControl(d) {
       <button class="btn" data-media="next" aria-label="Siguiente"><b>⏭</b><span>Siguiente</span></button>
     </div></div>`);
 
+  // Son dos ajustes distintos de Windows: el modo va encima del plan, por eso se explican en la tarjeta
   html.push(`<div class="card" data-cat="power"><h3>Energía de Windows</h3>
+    <span class="flabel">Modo de energía</span>
     <div class="seg" id="pmode">
       <button data-v="efficiency">Eficiencia</button><button data-v="balanced">Equilibrado</button><button data-v="performance">Rendimiento</button>
     </div>
-    <p class="note">Plan de energía</p>
+    <p class="note">El selector rápido de Windows 11 (Configuración → Energía). Ajusta cuánto prioriza el rendimiento sobre el consumo, encima del plan activo.</p>
+    <span class="flabel plan-label">Plan de energía</span>
     <select id="plan"></select>
+    <p class="note">El esquema clásico (Panel de control → Opciones de energía): define reglas como cuándo suspender o los estados del procesador. Armoury Crate cambia el plan con cada modo ASUS.</p>
   </div>`);
 
   if (d.asus?.available) html.push(`<div class="card" data-cat="fans"><h3>ASUS · Modo y ventiladores</h3>
@@ -883,6 +1112,12 @@ function buildControl(d) {
   </div>`);
 
   html.push(`<div class="card" data-cat="display"><h3>Pantallas</h3>
+    <div class="dlayout" id="dlayout" aria-label="Disposición de las pantallas"></div>
+    <div class="dlayout-actions hidden" id="dl-actions">
+      <span class="note">Soltá la pantalla junto a otra.</span><span class="spacer"></span>
+      <button class="btn sm ghost" id="dl-undo">Deshacer</button><button class="btn sm primary" id="dl-apply">Aplicar ubicación</button>
+    </div>
+    <div id="dlist"></div>
     <div id="displays"></div>
     <div class="seg" id="topo">
       <button data-v="internal" title="Solo la pantalla interna">Interna</button><button data-v="clone">Duplicar</button><button data-v="extend">Extender</button><button data-v="external" title="Solo la pantalla externa">Externa</button>
@@ -926,8 +1161,8 @@ function buildControl(d) {
 
   // --- Eventos ---
   bindSlider('vol', v => act('/audio', { volume: v }));
-  $('#mute').onclick = () => act('/audio', { mute: !last.controls.system.muted });
-  if ($('#mic')) $('#mic').onclick = () => act('/mic', { mute: !last.controls.system.micMuted });
+  $('#mute').onclick = () => toggleMute('muted', '/audio');
+  if ($('#mic')) $('#mic').onclick = () => toggleMute('micMuted', '/mic');
   if ($('#output')) $('#output').onchange = e => act('/audio/output', { action: e.target.value }, 'Salida cambiada');
   if ($('#bright')) bindSlider('bright', v => act('/brightness', { value: v }));
   if ($('#blimit')) $('#blimit').onclick = e => {
@@ -942,10 +1177,14 @@ function buildControl(d) {
   $('#pmode').onclick = e => { const b = e.target.closest('button'); if (b) act('/powermode', { action: b.dataset.v }, 'Modo cambiado'); };
   $('#plan').onchange = e => act('/powerplan', { action: e.target.value }, 'Plan cambiado');
 
-  document.querySelectorAll('[data-power]').forEach(b => b.onclick = () => {
+  // Todo menos bloquear pide confirmación en una ventana propia (el confirm() del navegador se
+  // puede desactivar en el celu con "no permitir más diálogos" y la acción saldría sin preguntar)
+  document.querySelectorAll('[data-power]').forEach(b => b.onclick = async () => {
     const a = b.dataset.power;
-    const ask = { sleep: '¿Suspender la PC?', hibernate: '¿Hibernar la PC?', restart: '¿Reiniciar la PC?', shutdown: '¿Apagar la PC?' }[a];
-    if (!ask || confirm(ask)) act('/power', { action: a }, 'Hecho');
+    const ask = { sleep: 'Suspender', hibernate: 'Hibernar', restart: 'Reiniciar', shutdown: 'Apagar' }[a];
+    const pc = info?.machine || 'la PC';
+    if (!ask || await askConfirm(`¿${ask} ${pc}?`, a === 'restart' || a === 'shutdown' ? 'Se cerrarán los programas abiertos sin guardar.' : '', ask, a === 'restart' || a === 'shutdown'))
+      act('/power', { action: a }, 'Hecho');
   });
 
   if ($('#amode')) {
@@ -997,9 +1236,15 @@ function buildControl(d) {
     await act('/display/mode', { device: box.dataset.device, width: w, height: h, hz: +hzSel.value }, `${w}×${h} @ ${hzSel.value} Hz`);
   };
 
-  $('#topo').onclick = e => {
+  bindDisplayLayout();
+
+  $('#topo').onclick = async e => {
     const b = e.target.closest('button');
-    if (b) act('/display/topology', { action: b.dataset.v }, 'Pantallas: ' + b.textContent);
+    if (!b) return;
+    // Se marca en el momento; si Windows lo rechaza, vuelve a mostrar el modo real
+    touched.topo = Date.now();
+    markTopology(b.dataset.v);
+    if (!await act('/display/topology', { action: b.dataset.v }, 'Pantallas: ' + b.textContent)) { touched.topo = 0; markTopology(topologyOf(last.controls.displayLayout || [])); }
   };
   $('#dp-form').onsubmit = async e => {
     e.preventDefault();
@@ -1071,6 +1316,9 @@ function updateControl(d) {
     out.innerHTML = c.system.outputs.map(o => `<option value="${esc(o.id)}" ${o.default ? 'selected' : ''}>${esc(o.name)}</option>`).join('');
   }
   document.querySelectorAll('#blimit button').forEach(b => b.classList.toggle('on', +b.dataset.v === c.batteryLimit));
+
+  renderDisplayLayout(c.displayLayout || []);
+  if (Date.now() - (touched.topo || 0) > 6000) markTopology(topologyOf(c.displayLayout || []));
 
   const dsig = JSON.stringify([c.displays, Object.keys(c.displayModes || {})]);
   if ($('#displays').dataset.sig !== dsig) {
@@ -1218,7 +1466,50 @@ function initCurveDrag() {
 }
 
 // ================= Ciclo =================
+// Confirmación en la ventana modal de la app; resuelve true solo si se toca el botón de aceptar
+function askConfirm(title, text, okLabel, danger = false) {
+  return new Promise(resolve => {
+    let done = false;
+    const finish = v => { if (!done) { done = true; closeModal(); resolve(v); } };
+    openModal(title, `${text ? `<p class="note confirm-text">${esc(text)}</p>` : ''}
+      <div class="modal-foot"><span class="spacer"></span>
+        <button type="button" class="btn ghost" data-no>Cancelar</button>
+        <button type="button" class="btn ${danger ? 'danger-fill' : 'primary'}" data-yes>${esc(okLabel)}</button></div>`, body => {
+      $('[data-no]', body).onclick = () => finish(false);
+      $('[data-yes]', body).onclick = () => finish(true);
+      // Cerrar con ✕ o tocando afuera cuenta como cancelar
+      new MutationObserver((_, o) => { if ($('#modal').classList.contains('hidden')) { o.disconnect(); finish(false); } })
+        .observe($('#modal'), { attributes: true, attributeFilter: ['class'] });
+    });
+  });
+}
+
+// Silenciar audio o micrófono: el botón cambia en el momento y vuelve atrás si la PC rechaza el cambio
+async function toggleMute(key, path) {
+  const value = !last.controls.system[key];
+  setPending(key, value);
+  if (!await act(path, { mute: value })) { delete pending[key]; setPending(key, !value); delete pending[key]; }
+}
+
+// Cambios hechos desde acá que la PC todavía no reflejó: se muestran al instante y se mantienen
+// unos segundos para que el próximo dato (que puede ser anterior al cambio) no los revierta
+const pending = {}; // clave de controls.system -> { value, until }
+
+function setPending(key, value) {
+  pending[key] = { value, until: Date.now() + 2500 };
+  if (!last?.controls) return;
+  last.controls.system[key] = value;
+  updateControl(last);
+  for (const id in busyUntil) delete busyUntil[id]; // el widget tocado también se actualiza ya
+  renderDashboard(last);
+}
+
 function onData(d) {
+  const now = Date.now();
+  for (const [k, p] of Object.entries(pending)) {
+    if (p.until < now || d.controls?.system[k] === p.value) delete pending[k];
+    else if (d.controls) d.controls.system[k] = p.value;
+  }
   last = d;
   tick(d);
   renderDashboard(d);

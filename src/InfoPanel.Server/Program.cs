@@ -177,6 +177,8 @@ api.MapPost("/tdp", (TdpRequest r, TdpControl t, TelemetryLoop l) => { l.Invalid
 
 // Pantallas
 api.MapPost("/display/mode", (DisplayModeRequest r, DisplayControl d, TelemetryLoop l) => { l.InvalidateControls(); return ErrorResult(d.SetMode(r.Device, r.Width, r.Height, r.Hz)); });
+api.MapPost("/display/active", (DisplayActiveRequest r, DisplayControl d, TelemetryLoop l) => { l.InvalidateControls(); return ErrorResult(d.SetActive(r.Ids)); });
+api.MapPost("/display/layout", (DisplayLayoutRequest r, DisplayControl d, TelemetryLoop l) => { l.InvalidateControls(); return ErrorResult(d.SetPositions(r.Displays, r.Primary)); });
 api.MapPost("/display/topology", (ActionRequest r, DisplayControl d, TelemetryLoop l) => { l.InvalidateControls(); return Result(d.SetTopology(r.Action)); });
 api.MapPost("/display/preset/save", (ActionRequest r, DisplayControl d, TelemetryLoop l) => { l.InvalidateControls(); return ErrorResult(d.SavePreset(r.Action)); });
 api.MapPost("/display/preset/apply", (ActionRequest r, DisplayControl d, TelemetryLoop l) => { l.InvalidateControls(); return ErrorResult(d.ApplyPreset(r.Action)); });
@@ -231,6 +233,8 @@ record LhmFanRequest(string Id, float? Percent);
 record TdpRequest(int Spl, int Sppt, int Fppt);
 record EnabledRequest(bool Enabled);
 record DisplayModeRequest(string Device, int Width, int Height, int Hz);
+record DisplayActiveRequest(List<string> Ids);
+record DisplayLayoutRequest(List<LayoutPlacement> Displays, string Primary);
 
 static partial class Program
 {

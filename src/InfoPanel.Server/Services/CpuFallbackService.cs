@@ -6,7 +6,7 @@ namespace InfoPanel.Services;
 
 /// <summary>
 /// Datos del CPU que no requieren el driver PawnIO de LibreHardwareMonitor:
-/// temperatura por ACPI de ASUS, consumo del paquete por los contadores RAPL de Windows
+/// temperatura por ACPI de ASUS o por las zonas térmicas ACPI de Windows (cualquier marca), consumo del paquete por los contadores RAPL de Windows
 /// y clock efectivo por el contador de rendimiento del procesador.
 /// Se agregan como sensores extra al CPU, y el panel los usa cuando los de LHM dan 0.
 /// </summary>
@@ -17,6 +17,7 @@ public sealed class CpuFallbackService : IDisposable
     private readonly AsusAcpi _acpi;
     private readonly PerformanceCounter? _rapl;
     private readonly PerformanceCounter? _perf;
+    private readonly List<PerformanceCounter> _zones = new();
     private readonly float _baseMhz;
 
     public CpuFallbackService(AsusAcpi acpi)
@@ -24,6 +25,13 @@ public sealed class CpuFallbackService : IDisposable
         _acpi = acpi;
         _rapl = TryCounter("Energy Meter", "Power", "RAPL_Package0_PKG");
         _perf = TryCounter("Processor Information", "% Processor Performance", "_Total");
+        // Zonas térmicas ACPI: en décimas de kelvin. Suelen ser la del CPU y alguna del chipset
+        try
+        {
+            foreach (var zone in new PerformanceCounterCategory("Thermal Zone Information").GetInstanceNames())
+                if (TryCounter("Thermal Zone Information", "High Precision Temperature", zone) is { } c) _zones.Add(c);
+        }
+        catch { }
         try
         {
             using var s = new ManagementObjectSearcher("SELECT MaxClockSpeed FROM Win32_Processor");
@@ -56,6 +64,8 @@ public sealed class CpuFallbackService : IDisposable
 
         if (_acpi.IsAvailable && _acpi.DeviceGet(AsusCpuTemp) is var t and > 0 and < 120)
             extra.Add(new SensorDto("/fallback/cpu/temperature", "CPU (ACPI ASUS)", "Temperature", t, null, null));
+        else if (ZoneTemp() is > 0 and < 120 and var z)
+            extra.Add(new SensorDto("/fallback/cpu/thermal-zone", "Zona térmica (ACPI)", "Temperature", z, null, null));
 
         if (_rapl is not null)
         {
@@ -74,6 +84,18 @@ public sealed class CpuFallbackService : IDisposable
             hardware[index] = cpu with { Sensors = cpu.Sensors.Concat(extra).ToList() };
     }
 
+    // La zona más caliente es casi siempre la del CPU
+    private float ZoneTemp()
+    {
+        var max = 0f;
+        foreach (var z in _zones)
+        {
+            var c = Read(z) / 10f - 273.15f;
+            if (c > max) max = c;
+        }
+        return MathF.Round(max, 1);
+    }
+
     private static float Read(PerformanceCounter c)
     {
         try { return c.NextValue(); }
@@ -84,5 +106,6 @@ public sealed class CpuFallbackService : IDisposable
     {
         _rapl?.Dispose();
         _perf?.Dispose();
+        _zones.ForEach(z => z.Dispose());
     }
 }

@@ -51,6 +51,7 @@ public sealed class TelemetryLoop : BackgroundService
                         displays = _display.GetDisplays(),
                         displayModes = _display.GetModes(),
                         displayPresets = _display.GetPresets(),
+                        displayLayout = _display.GetLayout(),
                         autoStart = _autoStart.IsEnabled,
                         batteryLimit = _asus.BatteryLimit,
                     };

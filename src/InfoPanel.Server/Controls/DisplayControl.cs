@@ -7,6 +7,10 @@ namespace InfoPanel.Controls;
 public record DisplayDto(string Name, bool Internal, int Width, int Height, double RefreshHz, int X, int Y, int Rotation, bool Primary, string? Device = null);
 public record DisplayModeDto(int Width, int Height, List<int> Hz);
 public record DisplayPresetDto(string Name, List<DisplayDto> Displays);
+// Pantalla conectada (prendida o no) para el editor de disposición. Id identifica la salida mientras
+// la PC esté encendida; X/Y/Width/Height son 0 si está apagada.
+public record LayoutDisplayDto(string Id, string Name, bool Internal, bool Active, bool Primary, int X, int Y, int Width, int Height);
+public record LayoutPlacement(string Id, int X, int Y);
 
 /// <summary>
 /// Pantallas conectadas y presets de configuración (orden/posición, resolución, Hz, principal, cuáles activas).
@@ -156,6 +160,104 @@ public sealed class DisplayControl
         dm.Fields = DisplayConfig.DM_PELSWIDTH | DisplayConfig.DM_PELSHEIGHT | DisplayConfig.DM_DISPLAYFREQUENCY;
         var r = DisplayConfig.ChangeDisplaySettingsEx(device, ref dm, IntPtr.Zero, DisplayConfig.CDS_UPDATEREGISTRY, IntPtr.Zero);
         return r == 0 ? null : $"Windows rechazó el modo (código {r})";
+    }
+
+    // ---------- Disposición: qué pantallas están prendidas y dónde ----------
+    private const uint PathActive = 0x1;
+
+    private static string TargetKey(in PathInfo p) => $"{p.Target.AdapterId.Low:x}-{p.Target.AdapterId.High:x}-{p.Target.Id}";
+
+    private static string TargetName(in PathInfo p, int index)
+    {
+        var info = new TargetDeviceName
+        {
+            Type = DisplayConfig.GET_TARGET_NAME,
+            Size = (uint)Marshal.SizeOf<TargetDeviceName>(),
+            AdapterId = p.Target.AdapterId,
+            Id = p.Target.Id,
+        };
+        if (DisplayConfig.DisplayConfigGetDeviceInfo(ref info) == 0 && !string.IsNullOrWhiteSpace(info.FriendlyName)) return info.FriendlyName;
+        return p.Target.OutputTechnology == DisplayConfig.OUTPUT_INTERNAL ? "Pantalla interna" : $"Pantalla {index + 1}";
+    }
+
+    /// <summary>Todas las pantallas conectadas, prendidas o apagadas, con su posición en el escritorio.</summary>
+    public List<LayoutDisplayDto> GetLayout()
+    {
+        var (paths, modes) = Query(DisplayConfig.QDC_ALL_PATHS);
+        var list = new List<LayoutDisplayDto>();
+        // QDC_ALL_PATHS devuelve cada combinación origen × salida: se agrupa por salida conectada
+        foreach (var group in paths.Where(p => p.Target.TargetAvailable != 0).GroupBy(p => TargetKey(p)))
+        {
+            var any = group.First();
+            var active = group.Where(p => (p.Flags & PathActive) != 0).Select(p => (PathInfo?)p).FirstOrDefault();
+            var src = active is { } a && a.Source.ModeInfoIdx < modes.Length ? modes[a.Source.ModeInfoIdx].Source : default;
+            list.Add(new LayoutDisplayDto(group.Key, TargetName(any, list.Count), any.Target.OutputTechnology == DisplayConfig.OUTPUT_INTERNAL,
+                active is not null, active is not null && src.X == 0 && src.Y == 0, src.X, src.Y, (int)src.Width, (int)src.Height));
+        }
+        // Prendidas primero, de izquierda a derecha
+        return list.OrderByDescending(d => d.Active).ThenBy(d => d.X).ThenBy(d => d.Y).ToList();
+    }
+
+    /// <summary>Prende las pantallas indicadas y apaga las demás. Windows elige resolución y ubicación de las nuevas.</summary>
+    public string? SetActive(IReadOnlyCollection<string> ids)
+    {
+        if (ids.Count == 0) return "Tiene que quedar al menos una pantalla prendida";
+        var (paths, modes) = Query(DisplayConfig.QDC_ALL_PATHS);
+        var chosen = new List<PathInfo>();
+        var usedSources = new HashSet<(uint, int, uint)>();
+        var groups = paths.Where(p => p.Target.TargetAvailable != 0).GroupBy(p => TargetKey(p)).ToList();
+        if (ids.Any(id => groups.All(g => g.Key != id))) return "Esa pantalla ya no está conectada";
+
+        // Las que ya estaban prendidas conservan su configuración (y su origen)
+        foreach (var g in groups)
+        {
+            if (!ids.Contains(g.Key)) continue;
+            foreach (var p in g.Where(p => (p.Flags & PathActive) != 0).Take(1))
+            {
+                chosen.Add(p);
+                usedSources.Add((p.Source.AdapterId.Low, p.Source.AdapterId.High, p.Source.Id));
+            }
+        }
+        // Las nuevas usan un origen libre del adaptador, sin modo: Windows elige resolución y lugar
+        foreach (var g in groups)
+        {
+            if (!ids.Contains(g.Key) || g.Any(p => (p.Flags & PathActive) != 0)) continue;
+            var free = g.Where(p => !usedSources.Contains((p.Source.AdapterId.Low, p.Source.AdapterId.High, p.Source.Id))).Select(p => (PathInfo?)p).FirstOrDefault();
+            if (free is not { } p) return "No hay salidas libres en la placa de video para prender esa pantalla";
+            p.Flags |= PathActive;
+            p.Source.ModeInfoIdx = DisplayConfig.INVALID_INDEX;
+            p.Target.ModeInfoIdx = DisplayConfig.INVALID_INDEX;
+            chosen.Add(p);
+            usedSources.Add((p.Source.AdapterId.Low, p.Source.AdapterId.High, p.Source.Id));
+        }
+        return Apply(chosen.ToArray(), modes);
+    }
+
+    /// <summary>Ubica las pantallas prendidas (coordenadas en píxeles). La principal queda en 0,0 y las demás se corren igual.</summary>
+    public string? SetPositions(IReadOnlyList<LayoutPlacement> placements, string primaryId)
+    {
+        var primary = placements.FirstOrDefault(p => p.Id == primaryId) ?? placements.FirstOrDefault();
+        if (primary is null) return "Faltan las posiciones";
+        var (paths, modes) = Query(DisplayConfig.QDC_ONLY_ACTIVE_PATHS);
+        foreach (var p in paths)
+        {
+            var place = placements.FirstOrDefault(x => x.Id == TargetKey(p));
+            if (place is null || p.Source.ModeInfoIdx >= modes.Length) continue;
+            modes[p.Source.ModeInfoIdx].Source.X = place.X - primary.X;
+            modes[p.Source.ModeInfoIdx].Source.Y = place.Y - primary.Y;
+        }
+        return Apply(paths, modes);
+    }
+
+    private static string? Apply(PathInfo[] paths, ModeInfo[] modes)
+    {
+        // ALLOW_CHANGES deja que Windows ajuste lo mínimo (por ejemplo, juntar pantallas separadas)
+        const uint flags = DisplayConfig.SDC_USE_SUPPLIED_DISPLAY_CONFIG | DisplayConfig.SDC_ALLOW_CHANGES;
+        var v = DisplayConfig.SetDisplayConfig((uint)paths.Length, paths, (uint)modes.Length, modes, flags | DisplayConfig.SDC_VALIDATE);
+        if (v != 0) return $"Windows no acepta esa disposición (código {v})";
+        var r = DisplayConfig.SetDisplayConfig((uint)paths.Length, paths, (uint)modes.Length, modes,
+            flags | DisplayConfig.SDC_APPLY | DisplayConfig.SDC_SAVE_TO_DATABASE);
+        return r == 0 ? null : $"Windows rechazó la disposición (código {r})";
     }
 
     /// <summary>Equivalente a Win+P: internal, clone, extend, external.</summary>
