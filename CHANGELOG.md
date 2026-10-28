@@ -2,6 +2,10 @@
 
 Los mismos datos se muestran en la app (Control → App → Historial de versiones) y salen de `src/InfoPanel.Core/wwwroot/changelog.json`.
 
+## 1.5.1 — 2026-10-28
+
+- Las actualizaciones y la instalación en Linux se descargan del repositorio público de InfoPanel, que reemplaza al de releases. Las versiones 1.2.0 a 1.5.0 no encuentran esta: hay que reemplazar el ejecutable a mano una vez.
+
 ## 1.5.0 — 2026-10-27
 
 - Versión para Linux: corre como servicio de systemd, también en servidores como Proxmox, y se instala con una sola línea que muestra la dirección, el PIN y un QR en la terminal.

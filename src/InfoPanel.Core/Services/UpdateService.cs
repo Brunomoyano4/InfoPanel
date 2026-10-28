@@ -11,15 +11,14 @@ public record UpdateStateDto(string Current, string? Latest, bool Available, str
     string Status, string? Error, int Progress, bool CanInstall, DateTime? CheckedAt, bool CheckFailed);
 
 /// <summary>
-/// Actualizaciones desde el repositorio público de releases (el código es privado; ahí solo se publican los
-/// ejecutables, uno por sistema). Revisa al arrancar y cada 6 horas. Instalar descarga el ejecutable nuevo,
+/// Actualizaciones desde los releases del repositorio público (un ejecutable por sistema). Revisa al arrancar y cada 6 horas. Instalar descarga el ejecutable nuevo,
 /// verifica su SHA-256 contra el que informa GitHub, lo pone en lugar del actual (el que corre se renombra
 /// a .old, Windows y Linux lo permiten) y arranca el nuevo según el sistema (IUpdatePlatform).
 /// Configuración, certificados y dashboards están junto al ejecutable y no se tocan.
 /// </summary>
 public sealed class UpdateService : BackgroundService
 {
-    public const string Repo = "Brunomoyano4/InfoPanel-releases";
+    public const string Repo = "Brunomoyano4/InfoPanel";
     public const string AfterUpdateArg = "--after-update";
 
     // Para probar con un servidor local: INFOPANEL_UPDATE_URL apunta a un JSON con el formato de la API de GitHub

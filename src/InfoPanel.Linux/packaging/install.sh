@@ -3,14 +3,14 @@
 # de systemd que arranca con el equipo. Usa el ejecutable que esté junto a este script; si no hay, descarga
 # el último publicado.
 #
-#   curl -fsSL https://github.com/Brunomoyano4/InfoPanel-releases/releases/latest/download/install.sh | sudo sh
+#   curl -fsSL https://github.com/Brunomoyano4/InfoPanel/releases/latest/download/install.sh | sudo sh
 #   sudo sh install.sh               instalar o actualizar
 #   sudo sh install.sh --uninstall   desinstalar (borra también la configuración y los dashboards)
 set -eu
 
 DIR=/opt/infopanel
 SERVICE=/etc/systemd/system/infopanel.service
-URL=https://github.com/Brunomoyano4/InfoPanel-releases/releases/latest/download/InfoPanel-linux-x64
+URL=https://github.com/Brunomoyano4/InfoPanel/releases/latest/download/InfoPanel-linux-x64
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "Ejecutalo como root: sudo sh $0" >&2

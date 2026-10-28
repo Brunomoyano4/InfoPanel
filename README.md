@@ -8,7 +8,7 @@ Hay versión para **Windows** (con ícono en la bandeja) y para **Linux** (servi
 
 ### Windows
 
-1. Descargar `InfoPanel.exe` desde los releases públicos: https://github.com/Brunomoyano4/InfoPanel-releases/releases/latest (el código de este repositorio es privado; ahí solo se publica el ejecutable). Es un solo archivo: no hace falta instalar .NET ni nada más.
+1. Descargar `InfoPanel.exe` desde los releases: https://github.com/Brunomoyano4/InfoPanel/releases/latest. Es un solo archivo: no hace falta instalar .NET ni nada más.
 2. Ponerlo en una carpeta propia (por ejemplo `C:\InfoPanel`), porque al lado se van a crear su configuración y sus certificados.
 3. Abrirlo y aceptar el permiso de administrador. Como el ejecutable no está firmado, Windows puede mostrar "Windows protegió su PC": hay que tocar **Más información → Ejecutar de todas formas**.
 4. Aceptar el aviso del firewall en **redes privadas**.
@@ -20,7 +20,7 @@ Hay versión para **Windows** (con ícono en la bandeja) y para **Linux** (servi
 Con una sola línea, como root (instala en `/opt/infopanel`, crea el servicio `infopanel` de systemd y lo deja arrancando con el equipo):
 
 ```bash
-curl -fsSL https://github.com/Brunomoyano4/InfoPanel-releases/releases/latest/download/install.sh | sudo sh
+curl -fsSL https://github.com/Brunomoyano4/InfoPanel/releases/latest/download/install.sh | sudo sh
 ```
 
 Al terminar muestra las direcciones, el PIN y un QR en la terminal. Después, `infopanel pin` los vuelve a mostrar y `journalctl -u infopanel -f` muestra el registro. También se puede descargar `InfoPanel-linux-x64` e `install.sh` del release, ponerlos en la misma carpeta y correr `sudo sh install.sh` (usa el ejecutable que tiene al lado). `sudo sh install.sh --uninstall` lo desinstala. Detalles en "Linux".
@@ -37,13 +37,13 @@ Cada PC genera su propio PIN, sus certificados y sus dashboards la primera vez q
 
 Desde la 1.2.0, InfoPanel se actualiza solo:
 
-- Revisa el repositorio público [`Brunomoyano4/InfoPanel-releases`](https://github.com/Brunomoyano4/InfoPanel-releases) 30 segundos después de arrancar y cada 6 horas (o con **Buscar actualizaciones** en Control → App, o tocando la versión en el menú de la bandeja).
+- Revisa los releases de este repositorio ([`Brunomoyano4/InfoPanel`](https://github.com/Brunomoyano4/InfoPanel/releases)) 30 segundos después de arrancar y cada 6 horas (o con **Buscar actualizaciones** en Control → App, o tocando la versión en el menú de la bandeja).
 - Si hay una versión nueva, avisa con una notificación en la bandeja, un ítem **Actualizar a la versión X** en su menú, un aviso arriba del Panel (se puede ocultar hasta la próxima versión) y, en Control → App, las novedades con el botón **Actualizar**.
 - Al actualizar: descarga el ejecutable de su sistema (`InfoPanel.exe` en Windows, `InfoPanel-linux-x64` en Linux), verifica que su SHA-256 coincida con la huella que publica GitHub para ese archivo (si no coincide o falta, no instala nada), renombra el ejecutable en uso a `InfoPanel.old.exe`, pone el nuevo en su lugar y lo arranca. El nuevo espera a que el anterior se cierre (argumento `--after-update`), avisa "InfoPanel actualizado" y borra el `.old`. En Linux, con el servicio de systemd, el proceso simplemente termina y systemd (`Restart=always`) arranca el ejecutable nuevo. La configuración, el PIN, los certificados y los dashboards están junto al ejecutable y no se tocan; los dispositivos vinculados se reconectan solos.
 - Solo el ejecutable publicado se reemplaza a sí mismo; en desarrollo (`dotnet build`, con `InfoPanel.dll` al lado) se ve si hay versión nueva pero no se instala.
 - Para probar sin GitHub, la variable de entorno `INFOPANEL_UPDATE_URL` apunta a otro JSON con el formato de la API de releases (`tag_name`, `body`, `assets[].name/size/digest/browser_download_url`).
 
-Para publicar una versión: subir `<Version>` en `src/Directory.Build.props` (es la misma para Windows y Linux), publicar los dos ejecutables y crear el release con la etiqueta `vX.Y.Z` en `InfoPanel-releases` (es el que leen las copias instaladas) y también en este repositorio, con tres archivos: `InfoPanel.exe`, `InfoPanel-linux-x64` e `install.sh`.
+Para publicar una versión: subir `<Version>` en `src/Directory.Build.props` (es la misma para Windows y Linux), publicar los dos ejecutables y crear el release con la etiqueta `vX.Y.Z` en este repositorio (es el que leen las copias instaladas), con tres archivos: `InfoPanel.exe`, `InfoPanel-linux-x64` e `install.sh`.
 
 ## Publicar una versión (desarrollo)
 
@@ -349,7 +349,7 @@ src/InfoPanel.Core/            Común: servidor, API, web, vinculación, certifi
 │   ├── ProcessSampler.cs      Procesos con su CPU y memoria
 │   ├── TelemetryHub.cs        Clientes WebSocket
 │   ├── TelemetryLoop.cs       Ciclo de 1 s que lee todo y lo envía
-│   └── UpdateService.cs       Actualizaciones desde InfoPanel-releases
+│   └── UpdateService.cs       Actualizaciones desde los releases de GitHub
 └── wwwroot/                   Web (HTML/CSS/JS sin build)
     ├── app.js                 PCs y conexión, métricas, sensores, procesos, control, temas
     ├── dashboard.js           Dashboards: grilla, widgets, edición, configuración
